@@ -1,0 +1,14 @@
+.*/
+artifacts/
+cache/
+*docs*/
+*mytest*/
+*openzeppelin*/
+*.back
+\[*\]/
+node_modules/
+node_modules.rar
+hardhat.config.js
+package-lock.json
+*data*
+*temp*
