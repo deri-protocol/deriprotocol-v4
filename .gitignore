@@ -12,3 +12,5 @@ hardhat.config.js
 package-lock.json
 *data*
 *temp*
+AAA/
+contracts/test/

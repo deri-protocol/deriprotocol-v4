@@ -2,14 +2,9 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import './PoolStorage.sol';
+import './VaultStorage.sol';
 
-contract Pool is PoolStorage {
-
-    function setImplementation(address newImplementation) external _onlyAdmin_ {
-        implementation = newImplementation;
-        emit NewImplementation(newImplementation);
-    }
+contract Vault is VaultStorage {
 
     fallback() external payable {
         address imp = implementation;

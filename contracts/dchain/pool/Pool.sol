@@ -2,16 +2,11 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import './SymbolManagerStorage.sol';
+import './PoolStorage.sol';
 
-contract SymbolManager is SymbolManagerStorage {
+contract Pool is PoolStorage {
 
-    function setImplementation(address newImplementation) external _onlyAdmin_ {
-        implementation = newImplementation;
-        emit NewImplementation(newImplementation);
-    }
-
-    fallback() external {
+    fallback() external payable {
         address imp = implementation;
         assembly {
             calldatacopy(0, 0, calldatasize())
@@ -22,5 +17,7 @@ contract SymbolManager is SymbolManagerStorage {
             default { return(0, returndatasize()) }
         }
     }
+
+    receive() external payable {}
 
 }

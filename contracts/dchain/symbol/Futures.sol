@@ -2,10 +2,10 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import '../interface/IFutures.sol';
-import './SafeMath.sol';
-import './Bytes32Map.sol';
-import './DpmmLinearPricing.sol';
+import './IFutures.sol';
+import '../../library/SafeMath.sol';
+import '../../library/Bytes32Map.sol';
+import '../../library/DpmmFutures.sol';
 
 library Futures {
 
@@ -243,10 +243,7 @@ library Futures {
         s.diffInitialMarginRequired = data.initialMarginRequired - state.getInt(S_INITIALMARGINREQUIRED);
 
         {
-            int256 diff;
-            unchecked {
-                diff = data.cumulativeFundingPerVolume - data.tdCumulativeFundingPerVolume;
-            }
+            int256 diff = data.cumulativeFundingPerVolume.minusUnchecked(data.tdCumulativeFundingPerVolume);
             s.traderFunding = data.tdVolume * diff / ONE;
         }
 
@@ -302,14 +299,11 @@ library Futures {
         _getFunding(data, v.indexPrice, v.liquidity);
 
         {
-            int256 diff;
-            unchecked {
-                diff = data.cumulativeFundingPerVolume - data.tdCumulativeFundingPerVolume;
-            }
+            int256 diff = data.cumulativeFundingPerVolume.minusUnchecked(data.tdCumulativeFundingPerVolume);
             s.traderFunding = data.tdVolume * diff / ONE;
         }
 
-        s.tradeCost = DpmmLinearPricing.calculateCost(
+        s.tradeCost = DpmmFutures.calculateCost(
             v.indexPrice, data.k, data.netVolume, v.tradeVolume
         );
         s.tradeFee = s.tradeCost.abs() * state.getInt(S_FEERATIO) / ONE;
@@ -338,7 +332,7 @@ library Futures {
         _getTradersPnl(data, v.indexPrice);
         _getInitialMarginRequired(data, v.indexPrice);
 
-        if (DpmmLinearPricing.calculateMarkPrice(v.indexPrice, data.k, data.netVolume) <= 0) {
+        if (DpmmFutures.calculateMarkPrice(v.indexPrice, data.k, data.netVolume) <= 0) {
             revert MarkExceedsLimit();
         }
 
@@ -426,13 +420,12 @@ library Futures {
         }
 
         {
-            int256 diff;
-            unchecked { diff = data.cumulativeFundingPerVolume - data.tdCumulativeFundingPerVolume; }
+            int256 diff = data.cumulativeFundingPerVolume.minusUnchecked(data.tdCumulativeFundingPerVolume);
             s.traderFunding = data.tdVolume * diff / ONE;
         }
 
         s.tradeVolume = -data.tdVolume;
-        s.tradeCost = DpmmLinearPricing.calculateCost(
+        s.tradeCost = DpmmFutures.calculateCost(
             v.indexPrice, data.k, data.netVolume, -data.tdVolume
         );
         s.tradeRealizedCost = s.tradeCost + data.tdCost;
@@ -547,17 +540,15 @@ library Futures {
     }
 
     function _getFunding(Data memory data, int256 indexPrice, int256 liquidity) internal pure {
-        data.k = DpmmLinearPricing.calculateFuturesK(data.alpha, indexPrice, liquidity);
-        int256 markPrice = DpmmLinearPricing.calculateMarkPrice(indexPrice, data.k, data.netVolume);
+        data.k = DpmmFutures.calculateK(data.alpha, indexPrice, liquidity);
+        int256 markPrice = DpmmFutures.calculateMarkPrice(indexPrice, data.k, data.netVolume);
         int256 diffFundingPerVolume = (markPrice - indexPrice) * (data.curTimestamp - data.preTimestamp) / data.fundingPeriod;
         data.funding = diffFundingPerVolume * data.netVolume / ONE;
-        unchecked {
-            data.cumulativeFundingPerVolume += diffFundingPerVolume;
-        }
+        data.cumulativeFundingPerVolume = data.cumulativeFundingPerVolume.addUnchecked(diffFundingPerVolume);
     }
 
     function _getTradersPnl(Data memory data, int256 indexPrice) internal pure {
-        data.tradersPnl = -(DpmmLinearPricing.calculateCost(
+        data.tradersPnl = -(DpmmFutures.calculateCost(
             indexPrice, data.k, data.netVolume, -data.netVolume
         ) + data.netCost);
     }
@@ -572,8 +563,8 @@ library Futures {
         int256 liquidity,
         int256 removedLiquidity
     ) internal pure {
-        int256 newK = DpmmLinearPricing.calculateFuturesK(data.alpha, indexPrice, liquidity - removedLiquidity);
-        int256 newTradersPnl = -(DpmmLinearPricing.calculateCost(
+        int256 newK = DpmmFutures.calculateK(data.alpha, indexPrice, liquidity - removedLiquidity);
+        int256 newTradersPnl = -(DpmmFutures.calculateCost(
             indexPrice, newK, data.netVolume, -data.netVolume
         ) + data.netCost);
         if (newTradersPnl > data.tradersPnl) {

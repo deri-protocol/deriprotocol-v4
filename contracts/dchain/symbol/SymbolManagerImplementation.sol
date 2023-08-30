@@ -2,17 +2,17 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import '../interface/ISymbolManager.sol';
-import '../interface/IOracle.sol';
-import '../interface/ISymbol.sol';
-import '../interface/IFutures.sol';
-import '../interface/IOption.sol';
-import '../interface/IPower.sol';
-import '../library/Bytes32Map.sol';
-import '../library/Futures.sol';
-import '../library/Option.sol';
-import '../library/Power.sol';
 import '@openzeppelin/contracts/utils/structs/EnumerableSet.sol';
+import '../../library/Bytes32Map.sol';
+import '../../oracle/IOracle.sol';
+import './ISymbolManager.sol';
+import './ISymbol.sol';
+import './IFutures.sol';
+import './IOption.sol';
+import './IPower.sol';
+import './Futures.sol';
+import './Option.sol';
+import './Power.sol';
 import './SymbolManagerStorage.sol';
 
 contract SymbolManagerImplementation is SymbolManagerStorage {
@@ -314,7 +314,7 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
             category == CATEGORY_POWER   ? state.getBytes32(Power.S_PRICEID)   :
             bytes32(0)
         )));
-        return IOracle(oracle).getValue(oracleId);
+        return IOracle(oracle).getValueCurrentBlock(oracleId);
     }
 
     function _getVolatility(bytes32 symbolId) internal view returns (int256) {
@@ -325,7 +325,7 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
             category == CATEGORY_POWER  ? state.getBytes32(Power.S_VOLATILITYID)  :
             bytes32(0)
         ));
-        return IOracle(oracle).getValue(oracleId);
+        return IOracle(oracle).getValueCurrentBlock(oracleId);
     }
 
     function _settleOnAddLiquidity(bytes32 symbolId, int256 liquidity)

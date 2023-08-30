@@ -2,11 +2,11 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import './OracleStorage.sol';
+import './SymbolManagerStorage.sol';
 
-contract Oracle is OracleStorage {
+contract SymbolManager is SymbolManagerStorage {
 
-    fallback() external payable {
+    fallback() external {
         address imp = implementation;
         assembly {
             calldatacopy(0, 0, calldatasize())
@@ -17,7 +17,5 @@ contract Oracle is OracleStorage {
             default { return(0, returndatasize()) }
         }
     }
-
-    receive() external payable {}
 
 }

@@ -55,6 +55,9 @@ library Bytes32Map {
         store[idx] = stringToBytes32(value);
     }
 
+    function del(mapping(uint8 => bytes32) storage store, uint8 idx) internal {
+        delete store[idx];
+    }
 
     function stringToBytes32(string memory value) internal pure returns (bytes32) {
         if (bytes(value).length > 31) {
