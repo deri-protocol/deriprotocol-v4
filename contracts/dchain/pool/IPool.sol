@@ -7,7 +7,7 @@ interface IPool {
     struct PoolParam {
         address symbolManager;
         address oracle;
-        address eventSigner;
+        address iChainEventSigner;
         int256  initialMarginMultiplier;
         int256  protocolFeeCollectRatio;
     }
@@ -36,21 +36,13 @@ interface IPool {
         bool    liquidated;
     }
 
-    struct VarOnAddLiquidity {
+    struct VarOnUpdateLiquidity {
         uint256 requestId;
         uint256 lTokenId;
         uint256 liquidity;
         int256  lastCumulativePnlOnEngine;
         int256  cumulativePnlOnVault;
-    }
-
-    struct VarOnRemoveLiquidity {
-        uint256 requestId;
-        uint256 lTokenId;
-        uint256 liquidity;
-        int256  lastCumulativePnlOnEngine;
-        int256  cumulativePnlOnVault;
-        uint256 bAmount;
+        uint256 removeBAmount;
     }
 
     struct VarOnRemoveMargin {

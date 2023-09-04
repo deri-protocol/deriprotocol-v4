@@ -96,14 +96,14 @@ contract VaultImplementation is VaultStorage {
         int256[] tradeParams
     );
 
-    event AddLiquidity(
+    event FinishAddLiquidity(
         uint256 requestId,
         uint256 lTokenId,
         uint256 liquidity,
         uint256 totalLiquidity
     );
 
-    event RemoveLiquidity(
+    event FinishRemoveLiquidity(
         uint256 requestId,
         uint256 lTokenId,
         uint256 liquidity,
@@ -119,14 +119,14 @@ contract VaultImplementation is VaultStorage {
         uint256 bAmount
     );
 
-    event RemoveMargin(
+    event FinishRemoveMargin(
         uint256 requestId,
         uint256 pTokenId,
         address bToken,
         uint256 bAmount
     );
 
-    event Liquidate(
+    event FinishLiquidate(
         uint256 requestId,
         uint256 pTokenId,
         int256  lpPnl
@@ -530,9 +530,9 @@ contract VaultImplementation is VaultStorage {
         );
     }
 
-    function callbackAddLiquidity(bytes memory eventData, bytes memory signature) external {
+    function finishAddLiquidity(bytes memory eventData, bytes memory signature) external {
         _verifyEventData(eventData, signature);
-        IVault.VarOnCallbackAddLiquidity memory v = abi.decode(eventData, (IVault.VarOnCallbackAddLiquidity));
+        IVault.VarOnExecuteAddLiquidity memory v = abi.decode(eventData, (IVault.VarOnExecuteAddLiquidity));
         _checkRequestId(v.lTokenId, v.requestId);
 
         _updateLiquidity(v.lTokenId, v.liquidity, v.totalLiquidity);
@@ -545,7 +545,7 @@ contract VaultImplementation is VaultStorage {
         _dTokenStates[v.lTokenId].set(D_B0AMOUNT, b0Amount);
         _dTokenStates[v.lTokenId].set(D_LASTCUMULATIVEPNLONENGINE, v.cumulativePnlOnEngine);
 
-        emit AddLiquidity(
+        emit FinishAddLiquidity(
             v.requestId,
             v.lTokenId,
             v.liquidity,
@@ -553,9 +553,9 @@ contract VaultImplementation is VaultStorage {
         );
     }
 
-    function callbackRemoveLiquidity(bytes memory eventData, bytes memory signature) external _reentryLock_ {
+    function finishRemoveLiquidity(bytes memory eventData, bytes memory signature) external _reentryLock_ {
         _verifyEventData(eventData, signature);
-        IVault.VarOnCallbackRemoveLiquidity memory v = abi.decode(eventData, (IVault.VarOnCallbackRemoveLiquidity));
+        IVault.VarOnExecuteRemoveLiquidity memory v = abi.decode(eventData, (IVault.VarOnExecuteRemoveLiquidity));
         _checkRequestId(v.lTokenId, v.requestId);
 
         _updateLiquidity(v.lTokenId, v.liquidity, v.totalLiquidity);
@@ -570,7 +570,7 @@ contract VaultImplementation is VaultStorage {
 
         _saveData(data);
 
-        emit RemoveLiquidity(
+        emit FinishRemoveLiquidity(
             v.requestId,
             v.lTokenId,
             v.liquidity,
@@ -580,9 +580,9 @@ contract VaultImplementation is VaultStorage {
         );
     }
 
-    function callbackRemoveMargin(bytes memory eventData, bytes memory signature) external _reentryLock_ {
+    function finishRemoveMargin(bytes memory eventData, bytes memory signature) external _reentryLock_ {
         _verifyEventData(eventData, signature);
-        IVault.VarOnCallbackRemoveMargin memory v = abi.decode(eventData, (IVault.VarOnCallbackRemoveMargin));
+        IVault.VarOnExecuteRemoveMargin memory v = abi.decode(eventData, (IVault.VarOnExecuteRemoveMargin));
         _checkRequestId(v.pTokenId, v.requestId);
 
         Data memory data = _getData(pToken.ownerOf(v.pTokenId), v.pTokenId, _dTokenStates[v.pTokenId].getAddress(D_BTOKEN));
@@ -599,7 +599,7 @@ contract VaultImplementation is VaultStorage {
 
         _saveData(data);
 
-        emit RemoveMargin(
+        emit FinishRemoveMargin(
             v.requestId,
             v.pTokenId,
             data.bToken,
@@ -607,9 +607,9 @@ contract VaultImplementation is VaultStorage {
         );
     }
 
-    function callbackLiquidate(bytes memory eventData, bytes memory signature) external _reentryLock_ {
+    function finishLiquidate(bytes memory eventData, bytes memory signature) external _reentryLock_ {
         _verifyEventData(eventData, signature);
-        IVault.VarOnCallbackLiquidate memory v = abi.decode(eventData, (IVault.VarOnCallbackLiquidate));
+        IVault.VarOnExecuteLiquidate memory v = abi.decode(eventData, (IVault.VarOnExecuteLiquidate));
 
         Data memory data = _getData(pToken.ownerOf(v.pTokenId), v.pTokenId, _dTokenStates[v.pTokenId].getAddress(D_BTOKEN));
         int256 diff = v.cumulativePnlOnEngine.minusUnchecked(data.lastCumulativePnlOnEngine);
@@ -666,7 +666,7 @@ contract VaultImplementation is VaultStorage {
         _saveData(data);
         pToken.burn(v.pTokenId);
 
-        emit Liquidate(
+        emit FinishLiquidate(
             v.requestId,
             v.pTokenId,
             lpPnl
@@ -803,10 +803,10 @@ contract VaultImplementation is VaultStorage {
 
     // liquidity is in decimals18
     function _getDTokenLiquidity(Data memory data) internal view returns (uint256 liquidity) {
-        uint256 b0Liquidity = (
+        uint256 liquidityInB0 = (
             data.stAmount * data.stExRate / UONE * data.bPrice / UONE * data.collateralFactor / UONE
         ).add(data.b0Amount);
-        return b0Liquidity.rescale(decimalsB0, 18);
+        return liquidityInB0.rescale(decimalsB0, 18);
     }
 
     function _getDTokenLiquidityWithRemove(Data memory data, uint256 bAmount) internal view returns (uint256 liquidity) {

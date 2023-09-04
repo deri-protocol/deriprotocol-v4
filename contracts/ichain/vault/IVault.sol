@@ -54,7 +54,7 @@ interface IVault {
         int256  lastCumulativePnlOnEngine;
     }
 
-    struct VarOnCallbackAddLiquidity {
+    struct VarOnExecuteAddLiquidity {
         uint256 requestId;
         uint256 lTokenId;
         uint256 liquidity;
@@ -62,7 +62,7 @@ interface IVault {
         int256  cumulativePnlOnEngine;
     }
 
-    struct VarOnCallbackRemoveLiquidity {
+    struct VarOnExecuteRemoveLiquidity {
         uint256 requestId;
         uint256 lTokenId;
         uint256 liquidity;
@@ -71,7 +71,7 @@ interface IVault {
         uint256 bAmount;
     }
 
-    struct VarOnCallbackRemoveMargin {
+    struct VarOnExecuteRemoveMargin {
         uint256 requestId;
         uint256 pTokenId;
         uint256 requiredMargin;
@@ -79,7 +79,7 @@ interface IVault {
         uint256 bAmount;
     }
 
-    struct VarOnCallbackLiquidate {
+    struct VarOnExecuteLiquidate {
         uint256 requestId;
         uint256 pTokenId;
         int256  cumulativePnlOnEngine;

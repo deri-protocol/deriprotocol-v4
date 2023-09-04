@@ -24,7 +24,7 @@ contract PoolImplementation is PoolStorage {
     error NoMaintenanceMarginRequired();
     error CanNotLiquidate();
 
-    event CallbackAddLiquidity(
+    event ExecuteAddLiquidity(
         uint256 requestId,
         uint256 lTokenId,
         uint256 liquidity,
@@ -32,7 +32,7 @@ contract PoolImplementation is PoolStorage {
         int256  cumulativePnlOnEngine
     );
 
-    event CallbackRemoveLiquidity(
+    event ExecuteRemoveLiquidity(
         uint256 requestId,
         uint256 lTokenId,
         uint256 liquidity,
@@ -41,7 +41,7 @@ contract PoolImplementation is PoolStorage {
         uint256 bAmount
     );
 
-    event CallbackRemoveMargin(
+    event ExecuteRemoveMargin(
         uint256 requestId,
         uint256 pTokenId,
         uint256 requiredMargin,
@@ -49,7 +49,7 @@ contract PoolImplementation is PoolStorage {
         uint256 bAmount
     );
 
-    event CallbackLiquidate(
+    event ExecuteLiquidate(
         uint256 requestId,
         uint256 pTokenId,
         int256  cumulativePnlOnEngine
@@ -72,20 +72,20 @@ contract PoolImplementation is PoolStorage {
 
     ISymbolManager internal immutable symbolManager;
     IOracle        internal immutable oracle;
-    address        internal immutable eventSigner;
+    address        internal immutable iChainEventSigner;
     int256         internal immutable initialMarginMultiplier;
     int256         internal immutable protocolFeeCollectRatio;
 
     constructor (
         address symbolManager_,
         address oracle_,
-        address eventSigner_,
+        address iChainEventSigner_,
         int256 initialMarginMultiplier_,
         int256 protocolFeeCollectRatio_
     ) {
         symbolManager = ISymbolManager(symbolManager_);
         oracle = IOracle(oracle_);
-        eventSigner = eventSigner_;
+        iChainEventSigner = iChainEventSigner_;
         initialMarginMultiplier = initialMarginMultiplier_;
         protocolFeeCollectRatio = protocolFeeCollectRatio_;
     }
@@ -97,7 +97,7 @@ contract PoolImplementation is PoolStorage {
     function getPoolParam() external view returns (IPool.PoolParam memory p) {
         p.symbolManager = address(symbolManager);
         p.oracle = address(oracle);
-        p.eventSigner = eventSigner;
+        p.iChainEventSigner = iChainEventSigner;
         p.initialMarginMultiplier = initialMarginMultiplier;
         p.protocolFeeCollectRatio = protocolFeeCollectRatio;
     }
@@ -130,20 +130,17 @@ contract PoolImplementation is PoolStorage {
     // Interactions
     //================================================================================
 
-    function addLiquidity(bytes memory eventData, bytes memory eventSig, IOracle.Signature[] memory signatures) external _reentryLock_ {
+    function updateLiquidity(bytes memory eventData, bytes memory eventSig, IOracle.Signature[] memory signatures) external _reentryLock_ {
         _verifyEventData(eventData, eventSig);
         oracle.updateOffchainValues(signatures);
-        IPool.VarOnAddLiquidity memory v = abi.decode(eventData, (IPool.VarOnAddLiquidity));
+        IPool.VarOnUpdateLiquidity memory v = abi.decode(eventData, (IPool.VarOnUpdateLiquidity));
         _updateRequestId(v.lTokenId, v.requestId);
-        _addLiquidity(v);
-    }
-
-    function removeLiquidity(bytes memory eventData, bytes memory eventSig, IOracle.Signature[] memory signatures) external _reentryLock_ {
-        _verifyEventData(eventData, eventSig);
-        oracle.updateOffchainValues(signatures);
-        IPool.VarOnRemoveLiquidity memory v = abi.decode(eventData, (IPool.VarOnRemoveLiquidity));
-        _updateRequestId(v.lTokenId, v.requestId);
-        _removeLiquidity(v);
+        uint256 curLiquidity = _dStates[v.lTokenId].getInt(D_LIQUIDITY).itou();
+        if (v.liquidity > curLiquidity) {
+            _addLiquidity(v);
+        } else if (v.liquidity < curLiquidity) {
+            _removeLiquidity(v);
+        }
     }
 
     function removeMargin(bytes memory eventData, bytes memory eventSig, IOracle.Signature[] memory signatures) external _reentryLock_ {
@@ -182,7 +179,7 @@ contract PoolImplementation is PoolStorage {
     // Internal Interactions
     //================================================================================
 
-    function _addLiquidity(IPool.VarOnAddLiquidity memory v) internal {
+    function _addLiquidity(IPool.VarOnUpdateLiquidity memory v) internal {
         Data memory data = _getData(v.lTokenId, true);
 
         if (data.totalLiquidity > 0) {
@@ -203,7 +200,7 @@ contract PoolImplementation is PoolStorage {
 
         _saveData(data, v.lTokenId, true);
 
-        emit CallbackAddLiquidity(
+        emit ExecuteAddLiquidity(
             v.requestId,
             v.lTokenId,
             data.lpLiquidity.itou(),
@@ -212,7 +209,7 @@ contract PoolImplementation is PoolStorage {
         );
     }
 
-    function _removeLiquidity(IPool.VarOnRemoveLiquidity memory v) internal {
+    function _removeLiquidity(IPool.VarOnUpdateLiquidity memory v) internal {
         Data memory data = _getData(v.lTokenId, true);
 
         int256 removedLiquidity = data.lpLiquidity - v.liquidity.utoi();
@@ -238,13 +235,13 @@ contract PoolImplementation is PoolStorage {
 
         _saveData(data, v.lTokenId, true);
 
-        emit CallbackRemoveLiquidity(
+        emit ExecuteRemoveLiquidity(
             v.requestId,
             v.lTokenId,
             data.lpLiquidity.itou(),
             data.totalLiquidity.itou(),
             data.cumulativePnl,
-            v.bAmount
+            v.removeBAmount
         );
     }
 
@@ -259,18 +256,18 @@ contract PoolImplementation is PoolStorage {
 
         data.cumulativePnl = data.cumulativePnl.minusUnchecked(s.traderFunding);
 
-        int256 pnl = data.cumulativePnl.minusUnchecked(v.lastCumulativePnlOnEngine);
-        int256 requiredMargin = SafeMath.max(s.traderInitialMarginRequired - s.traderPnl, int256(0));
-        if (v.margin.utoi() + pnl < requiredMargin) {
+        int256 realizedPnl = data.cumulativePnl.minusUnchecked(v.lastCumulativePnlOnEngine);
+        int256 requiredRealMoneyForMargin = SafeMath.max(s.traderInitialMarginRequired - s.traderPnl, int256(0));
+        if (v.margin.utoi() + realizedPnl < requiredRealMoneyForMargin) {
             revert InsufficientMargin();
         }
 
         _saveData(data, v.pTokenId, false);
 
-        emit CallbackRemoveMargin(
+        emit ExecuteRemoveMargin(
             v.requestId,
             v.pTokenId,
-            requiredMargin.itou(),
+            requiredRealMoneyForMargin.itou(),
             data.cumulativePnl,
             v.bAmount
         );
@@ -331,7 +328,7 @@ contract PoolImplementation is PoolStorage {
         _saveData(data, v.pTokenId, false);
         _dStates[v.pTokenId].set(D_LIQUIDATED, true);
 
-        emit CallbackLiquidate(
+        emit ExecuteLiquidate(
             v.requestId,
             v.pTokenId,
             data.cumulativePnl
@@ -375,7 +372,7 @@ contract PoolImplementation is PoolStorage {
 
     function _verifyEventData(bytes memory eventData, bytes memory signature) internal view {
         bytes32 hash = ECDSA.toEthSignedMessageHash(keccak256(eventData));
-        if (ECDSA.recover(hash, signature) != eventSigner) {
+        if (ECDSA.recover(hash, signature) != iChainEventSigner) {
             revert InvalidSignature();
         }
     }
