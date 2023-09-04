@@ -41,21 +41,13 @@ contract VaultImplementation is VaultStorage {
 
     event UpdateBToken(address bToken);
 
-    event RequestAddLiquidity(
-        uint256 requestId,
-        uint256 lTokenId,
-        uint256 liquidity,
-        int256  lastCumulativePnlOnEngine,
-        int256  cumulativePnlOnVault
-    );
-
-    event RequestRemoveLiquidity(
+    event RequestUpdateLiquidity(
         uint256 requestId,
         uint256 lTokenId,
         uint256 liquidity,
         int256  lastCumulativePnlOnEngine,
         int256  cumulativePnlOnVault,
-        uint256 bAmount
+        uint256 removeBAmount
     );
 
     event RequestRemoveMargin(
@@ -374,12 +366,13 @@ contract VaultImplementation is VaultStorage {
         _saveData(data);
 
         uint256 requestId = _incrementRequestId(lTokenId);
-        emit RequestAddLiquidity(
+        emit RequestUpdateLiquidity(
             requestId,
             lTokenId,
             newLiquidity,
             data.lastCumulativePnlOnEngine,
-            data.cumulativePnlOnVault
+            data.cumulativePnlOnVault,
+            0
         );
     }
 
@@ -395,7 +388,7 @@ contract VaultImplementation is VaultStorage {
         }
 
         uint256 requestId = _incrementRequestId(lTokenId);
-        emit RequestRemoveLiquidity(
+        emit RequestUpdateLiquidity(
             requestId,
             lTokenId,
             newLiquidity,
