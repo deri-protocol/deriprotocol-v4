@@ -261,6 +261,10 @@ contract GatewayImplementation is GatewayStorage {
     // Setters
     //================================================================================
 
+    function approveVault0() external _onlyAdmin_ {
+        tokenB0.approveMax(address(vault0));
+    }
+
     function addBToken(
         address bToken,
         address vault,
