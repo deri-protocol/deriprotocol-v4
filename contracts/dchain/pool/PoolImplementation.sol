@@ -60,7 +60,7 @@ contract PoolImplementation is PoolStorage {
     uint8 constant S_CUMULATIVEPNLPERLIQUIDITY = 3;
     uint8 constant S_PROTOCOLFEE               = 4;
 
-    uint8 constant I_LASTCUMULATIVEPNLONVAULT  = 1;
+    uint8 constant I_LASTCUMULATIVEPNLONGATEWAY = 1;
 
     uint8 constant D_REQUESTID                 = 1;
     uint8 constant D_CUMULATIVEPNL             = 2;
@@ -110,7 +110,7 @@ contract PoolImplementation is PoolStorage {
     }
 
     function getChainState(uint88 chainId) external view returns (IPool.ChainState memory s) {
-        s.lastCumulativePnlOnVault = _iStates[chainId].getInt(I_LASTCUMULATIVEPNLONVAULT);
+        s.lastCumulativePnlOnGateway = _iStates[chainId].getInt(I_LASTCUMULATIVEPNLONGATEWAY);
     }
 
     function getLpState(uint256 lTokenId) external view returns (IPool.LpState memory s) {
@@ -186,7 +186,7 @@ contract PoolImplementation is PoolStorage {
             ISymbolManager.SettlementOnAddLiquidity memory s =
                 symbolManager.settleSymbolsOnAddLiquidity(data.totalLiquidity + data.lpsPnl);
 
-            int256 undistributedPnl = s.funding - s.diffTradersPnl + _updateCumulativePnlOnVault(v.lTokenId, v.cumulativePnlOnVault);
+            int256 undistributedPnl = s.funding - s.diffTradersPnl + _updateCumulativePnlOnGateway(v.lTokenId, v.cumulativePnlOnGateway);
             _settleUndistributedPnl(data, undistributedPnl);
         }
 
@@ -217,7 +217,7 @@ contract PoolImplementation is PoolStorage {
             symbolManager.settleSymbolsOnRemoveLiquidity(data.totalLiquidity + data.lpsPnl, removedLiquidity);
 
         int256 undistributedPnl = s.funding - s.diffTradersPnl + s.removeLiquidityPenalty
-                                + _updateCumulativePnlOnVault(v.lTokenId, v.cumulativePnlOnVault);
+                                + _updateCumulativePnlOnGateway(v.lTokenId, v.cumulativePnlOnGateway);
         _settleUndistributedPnl(data, undistributedPnl);
 
         data.cumulativePnl = data.cumulativePnl.minusUnchecked(s.removeLiquidityPenalty);
@@ -251,7 +251,7 @@ contract PoolImplementation is PoolStorage {
         ISymbolManager.SettlementOnRemoveMargin memory s =
             symbolManager.settleSymbolsOnRemoveMargin(v.pTokenId, data.totalLiquidity + data.lpsPnl);
 
-        int256 undistributedPnl = s.funding - s.diffTradersPnl + _updateCumulativePnlOnVault(v.pTokenId, v.cumulativePnlOnVault);
+        int256 undistributedPnl = s.funding - s.diffTradersPnl + _updateCumulativePnlOnGateway(v.pTokenId, v.cumulativePnlOnGateway);
         _settleUndistributedPnl(data, undistributedPnl);
 
         data.cumulativePnl = data.cumulativePnl.minusUnchecked(s.traderFunding);
@@ -287,7 +287,7 @@ contract PoolImplementation is PoolStorage {
         _states.set(S_PROTOCOLFEE, _states.getInt(S_PROTOCOLFEE) + collect);
 
         int256 undistributedPnl = s.funding - s.diffTradersPnl + s.tradeFee - collect + s.tradeRealizedCost
-                                + _updateCumulativePnlOnVault(v.pTokenId, v.cumulativePnlOnVault);
+                                + _updateCumulativePnlOnGateway(v.pTokenId, v.cumulativePnlOnGateway);
         _settleUndistributedPnl(data, undistributedPnl);
 
         data.cumulativePnl = data.cumulativePnl.minusUnchecked(s.traderFunding + s.tradeFee + s.tradeRealizedCost);
@@ -309,7 +309,7 @@ contract PoolImplementation is PoolStorage {
         );
 
         int256 undistributedPnl = s.funding - s.diffTradersPnl + s.tradeRealizedCost
-                                + _updateCumulativePnlOnVault(v.pTokenId, v.cumulativePnlOnVault);
+                                + _updateCumulativePnlOnGateway(v.pTokenId, v.cumulativePnlOnGateway);
         _settleUndistributedPnl(data, undistributedPnl);
 
         if (s.traderMaintenanceMarginRequired <= 0) {
@@ -341,7 +341,7 @@ contract PoolImplementation is PoolStorage {
             pTokenId: v.pTokenId,
             margin: v.margin,
             lastCumulativePnlOnEngine: v.lastCumulativePnlOnEngine,
-            cumulativePnlOnVault: v.cumulativePnlOnVault,
+            cumulativePnlOnGateway: v.cumulativePnlOnGateway,
             symbolId: v.symbolId,
             tradeParams: v.tradeParams
         }));
@@ -350,7 +350,7 @@ contract PoolImplementation is PoolStorage {
             pTokenId: v.pTokenId,
             margin: v.margin,
             lastCumulativePnlOnEngine: v.lastCumulativePnlOnEngine,
-            cumulativePnlOnVault: v.cumulativePnlOnVault,
+            cumulativePnlOnGateway: v.cumulativePnlOnGateway,
             bAmount: v.bAmount
         }));
     }
@@ -415,12 +415,12 @@ contract PoolImplementation is PoolStorage {
         return uint88(dTokenId >> 160);
     }
 
-    function _updateCumulativePnlOnVault(uint256 dTokenId, int256 cumulativePnlOnVault) internal returns (int256 undistributedPnl) {
+    function _updateCumulativePnlOnGateway(uint256 dTokenId, int256 cumulativePnlOnGateway) internal returns (int256 undistributedPnl) {
         uint88 chainId = _getChainIdFromDTokenId(dTokenId);
-        int256 lastCumulativePnlOnVault = _iStates[chainId].getInt(I_LASTCUMULATIVEPNLONVAULT);
-        if (lastCumulativePnlOnVault != cumulativePnlOnVault) {
-            undistributedPnl = cumulativePnlOnVault.minusUnchecked(lastCumulativePnlOnVault);
-            _iStates[chainId].set(I_LASTCUMULATIVEPNLONVAULT, cumulativePnlOnVault);
+        int256 lastCumulativePnlOnGateway = _iStates[chainId].getInt(I_LASTCUMULATIVEPNLONGATEWAY);
+        if (lastCumulativePnlOnGateway != cumulativePnlOnGateway) {
+            undistributedPnl = cumulativePnlOnGateway.minusUnchecked(lastCumulativePnlOnGateway);
+            _iStates[chainId].set(I_LASTCUMULATIVEPNLONGATEWAY, cumulativePnlOnGateway);
         }
     }
 

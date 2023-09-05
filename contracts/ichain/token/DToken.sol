@@ -7,7 +7,7 @@ import '@openzeppelin/contracts/token/ERC721/ERC721.sol';
 contract DToken is ERC721 {
 
     error ChainIdOverflow();
-    error OnlyVault();
+    error OnlyGateway();
 
     // We encode the dTokenId as follows to ensure every dTokenId
     // on all chains in every DToken contract is unique
@@ -17,15 +17,15 @@ contract DToken is ERC721 {
     // The highest 96 bits will be fixed at deployment, and stored in BASE_TOKENID
     uint256 public immutable BASE_TOKENID;
 
-    // Only vault can mint/burn tokens
-    address public immutable vault;
+    // Only gateway can mint/burn tokens
+    address public immutable gateway;
 
     // Total number of tokens minted, included those burned
     uint160 public totalMinted;
 
-    modifier _onlyVault_() {
-        if (msg.sender != vault) {
-            revert OnlyVault();
+    modifier _onlyGateway_() {
+        if (msg.sender != gateway) {
+            revert OnlyGateway();
         }
         _;
     }
@@ -34,21 +34,21 @@ contract DToken is ERC721 {
         uint8 uniqueIdentifier,
         string memory name_,
         string memory symbol_,
-        address vault_
+        address gateway_
     ) ERC721(name_, symbol_) {
-        vault = vault_;
+        gateway = gateway_;
         if (block.chainid > type(uint88).max) {
             revert ChainIdOverflow();
         }
         BASE_TOKENID = (uint256(uniqueIdentifier) << 248) + (block.chainid << 160);
     }
 
-    function mint(address owner) external _onlyVault_ returns (uint256 tokenId) {
+    function mint(address owner) external _onlyGateway_ returns (uint256 tokenId) {
         tokenId = BASE_TOKENID + uint256(++totalMinted);
         _safeMint(owner, tokenId);
     }
 
-    function burn(uint256 tokenId) external _onlyVault_ {
+    function burn(uint256 tokenId) external _onlyGateway_ {
         _burn(tokenId);
     }
 

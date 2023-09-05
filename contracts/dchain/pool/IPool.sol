@@ -20,7 +20,7 @@ interface IPool {
     }
 
     struct ChainState {
-        int256 lastCumulativePnlOnVault;
+        int256 lastCumulativePnlOnGateway;
     }
 
     struct LpState {
@@ -41,7 +41,7 @@ interface IPool {
         uint256 lTokenId;
         uint256 liquidity;
         int256  lastCumulativePnlOnEngine;
-        int256  cumulativePnlOnVault;
+        int256  cumulativePnlOnGateway;
         uint256 removeBAmount;
     }
 
@@ -50,7 +50,7 @@ interface IPool {
         uint256 pTokenId;
         uint256 margin;
         int256  lastCumulativePnlOnEngine;
-        int256  cumulativePnlOnVault;
+        int256  cumulativePnlOnGateway;
         uint256 bAmount;
     }
 
@@ -59,7 +59,7 @@ interface IPool {
         uint256 pTokenId;
         uint256 margin;
         int256  lastCumulativePnlOnEngine;
-        int256  cumulativePnlOnVault;
+        int256  cumulativePnlOnGateway;
         bytes32 symbolId;
         int256[] tradeParams;
     }
@@ -69,7 +69,7 @@ interface IPool {
         uint256 pTokenId;
         uint256 margin;
         int256  lastCumulativePnlOnEngine;
-        int256  cumulativePnlOnVault;
+        int256  cumulativePnlOnGateway;
     }
 
     struct VarOnTradeAndRemoveMargin {
@@ -77,7 +77,7 @@ interface IPool {
         uint256 pTokenId;
         uint256 margin;
         int256  lastCumulativePnlOnEngine;
-        int256  cumulativePnlOnVault;
+        int256  cumulativePnlOnGateway;
         uint256 bAmount;
         bytes32 symbolId;
         int256[] tradeParams;
