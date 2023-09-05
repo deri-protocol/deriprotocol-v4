@@ -18,6 +18,7 @@ contract VaultImplementationVenus is VaultStorage {
 
     error OnlyGateway();
     error NotMarket();
+    error InvalidAsset();
     error EnterMarketError();
     error ExitMarketError();
     error DepositError();
@@ -41,27 +42,20 @@ contract VaultImplementationVenus is VaultStorage {
 
     constructor (
         address gateway_,
+        address asset_,
         address market_,
         address comptroller_,
         address rewardToken_
     ) {
-        gateway = gateway_;
-
         if (!IVenusMarket(market_).isVToken()) {
             revert NotMarket();
         }
-
-        address asset_;
-        (bool success, bytes memory data) = market_.staticcall(
-            abi.encodeWithSelector(IVenusMarket.underlying.selector)
-        );
-        if (success) {
-            asset_ = abi.decode(data, (address));
-        } else {
-            asset_ = assetETH;
+        if (asset_ != assetETH && IVenusMarket(market_).underlying() != asset_) {
+            revert InvalidAsset();
         }
-        asset = asset_;
 
+        gateway = gateway_;
+        asset = asset_;
         market = market_;
         comptroller = comptroller_;
         rewardToken = rewardToken_;

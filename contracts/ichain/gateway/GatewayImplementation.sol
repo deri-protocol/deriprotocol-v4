@@ -786,6 +786,7 @@ contract GatewayImplementation is GatewayStorage {
             uint256 reserved = bAmount * b0ReserveRatio / UONE;
             bAmount -= reserved;
             vault0.deposit(uint256(0), reserved);
+            data.b0Amount += reserved.utoi();
         }
         if (data.bToken == tokenETH) {
             IVault(data.vault).deposit{value: bAmount}(data.dTokenId, bAmount);
