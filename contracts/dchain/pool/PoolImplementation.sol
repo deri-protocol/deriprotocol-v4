@@ -154,7 +154,16 @@ contract PoolImplementation is PoolStorage {
     function trade(bytes memory eventData, bytes memory eventSig, IOracle.Signature[] memory signatures) external _reentryLock_ {
         _verifyEventData(eventData, eventSig);
         oracle.updateOffchainValues(signatures);
-        IPool.VarOnTrade memory v = abi.decode(eventData, (IPool.VarOnTrade));
+        IPool.VarOnTrade memory v;
+        (
+            v.requestId,
+            v.pTokenId,
+            v.margin,
+            v.lastCumulativePnlOnEngine,
+            v.cumulativePnlOnGateway,
+            v.symbolId,
+            v.tradeParams
+        ) = abi.decode(eventData, (uint256, uint256, uint256, int256, int256, bytes32, int256[]));
         _updateRequestId(v.pTokenId, v.requestId);
         _trade(v);
     }
