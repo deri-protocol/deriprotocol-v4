@@ -16,7 +16,7 @@ contract VaultImplementationVenus is VaultStorage {
     using ETHAndERC20 for address;
     using SafeMath for uint256;
 
-    error OnlyVault();
+    error OnlyGateway();
     error NotMarket();
     error EnterMarketError();
     error ExitMarketError();
@@ -26,26 +26,26 @@ contract VaultImplementationVenus is VaultStorage {
     uint256 constant UONE = 1e18;
     address constant assetETH = address(1);
 
-    address public immutable vault;
+    address public immutable gateway;
     address public immutable asset;
     address public immutable market;
     address public immutable comptroller;
     address public immutable rewardToken;
 
-    modifier _onlyVault_() {
-        if (msg.sender != vault) {
-            revert OnlyVault();
+    modifier _onlyGateway_() {
+        if (msg.sender != gateway) {
+            revert OnlyGateway();
         }
         _;
     }
 
     constructor (
-        address vault_,
+        address gateway_,
         address market_,
         address comptroller_,
         address rewardToken_
     ) {
-        vault = vault_;
+        gateway = gateway_;
 
         if (!IVenusMarket(market_).isVToken()) {
             revert NotMarket();
@@ -102,12 +102,12 @@ contract VaultImplementationVenus is VaultStorage {
         }
     }
 
-    function deposit(uint256 dTokenId, uint256 amount) external payable _onlyVault_ returns (uint256 mintedSt) {
+    function deposit(uint256 dTokenId, uint256 amount) external payable _onlyGateway_ returns (uint256 mintedSt) {
         uint256 m1 = market.balanceOfThis();
         if (asset == assetETH) {
             IVenusMarket(market).mint{value: msg.value}();
         } else {
-            asset.transferIn(vault, amount);
+            asset.transferIn(gateway, amount);
             uint256 error = IVenusMarket(market).mint(amount);
             if (error != 0) {
                 revert DepositError();
@@ -123,7 +123,7 @@ contract VaultImplementationVenus is VaultStorage {
         stTotalAmount += mintedSt;
     }
 
-    function redeem(uint256 dTokenId, uint256 amount) external _onlyVault_ returns (uint256 redeemedAmount) {
+    function redeem(uint256 dTokenId, uint256 amount) external _onlyGateway_ returns (uint256 redeemedAmount) {
         uint256 m1 = market.balanceOfThis();
         uint256 a1 = asset.balanceOfThis();
 
@@ -154,7 +154,7 @@ contract VaultImplementationVenus is VaultStorage {
         stTotalAmount -= burnedSt;
 
         redeemedAmount = a2 - a1;
-        asset.transferOut(vault, redeemedAmount);
+        asset.transferOut(gateway, redeemedAmount);
     }
 
 }

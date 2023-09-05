@@ -16,34 +16,34 @@ contract VaultImplementationAave is VaultStorage {
     using ETHAndERC20 for address;
     using SafeMath for uint256;
 
-    error OnlyVault();
+    error OnlyGateway();
     error WithdrawError();
 
     uint256 constant UONE = 1e18;
     address constant assetETH = address(1);
 
-    address public immutable vault;
+    address public immutable gateway;
     address public immutable asset;
     address public immutable market;
     address public immutable weth;
     address public immutable aavePool;
     address public immutable rewardController;
 
-    modifier _onlyVault_() {
-        if (msg.sender != vault) {
-            revert OnlyVault();
+    modifier _onlyGateway_() {
+        if (msg.sender != gateway) {
+            revert OnlyGateway();
         }
         _;
     }
 
     constructor (
-        address vault_,
+        address gateway_,
         address market_,
         address weth_,
         address aavePool_,
         address rewardController_
     ) {
-        vault = vault_;
+        gateway = gateway_;
 
         address asset_ = IMarket(market_).UNDERLYING_ASSET_ADDRESS();
         if (asset_ == weth_) {
@@ -90,13 +90,13 @@ contract VaultImplementationAave is VaultStorage {
         }
     }
 
-    function deposit(uint256 dTokenId, uint256 amount) external payable _onlyVault_ returns (uint256 mintedSt) {
+    function deposit(uint256 dTokenId, uint256 amount) external payable _onlyGateway_ returns (uint256 mintedSt) {
         if (asset == assetETH) {
             amount = msg.value;
             IWETH(weth).deposit{value: amount}();
             IPool(aavePool).supply(weth, amount, address(this), 0);
         } else {
-            asset.transferIn(vault, amount);
+            asset.transferIn(gateway, amount);
             IPool(aavePool).supply(asset, amount, address(this), 0);
         }
 
@@ -112,7 +112,7 @@ contract VaultImplementationAave is VaultStorage {
         stTotalAmount += mintedSt;
     }
 
-    function redeem(uint256 dTokenId, uint256 amount) external _onlyVault_ returns (uint256 redeemedAmount) {
+    function redeem(uint256 dTokenId, uint256 amount) external _onlyGateway_ returns (uint256 redeemedAmount) {
         uint256 stAmount = stAmounts[dTokenId];
         uint256 stTotal = stTotalAmount;
 
@@ -135,7 +135,7 @@ contract VaultImplementationAave is VaultStorage {
         stAmounts[dTokenId] -= burnedSt;
         stTotalAmount -= burnedSt;
 
-        asset.transferOut(vault, redeemedAmount);
+        asset.transferOut(gateway, redeemedAmount);
     }
 
 }

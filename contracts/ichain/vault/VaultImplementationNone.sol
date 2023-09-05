@@ -11,23 +11,23 @@ contract VaultImplementationNone is VaultStorage {
     using ETHAndERC20 for address;
     using SafeMath for uint256;
 
-    error OnlyVault();
+    error OnlyGateway();
 
     uint256 constant UONE = 1e18;
     address constant assetETH = address(1);
 
-    address public immutable vault;
+    address public immutable gateway;
     address public immutable asset;
 
-    modifier _onlyVault_() {
-        if (msg.sender != vault) {
-            revert OnlyVault();
+    modifier _onlyGateway_() {
+        if (msg.sender != gateway) {
+            revert OnlyGateway();
         }
         _;
     }
 
-    constructor (address vault_, address asset_) {
-        vault = vault_;
+    constructor (address gateway_, address asset_) {
+        gateway = gateway_;
         asset = asset_;
     }
 
@@ -38,11 +38,11 @@ contract VaultImplementationNone is VaultStorage {
         }
     }
 
-    function deposit(uint256 dTokenId, uint256 amount) external payable _onlyVault_ returns (uint256 mintedSt) {
+    function deposit(uint256 dTokenId, uint256 amount) external payable _onlyGateway_ returns (uint256 mintedSt) {
         if (asset == assetETH) {
             amount = msg.value;
         } else {
-            asset.transferIn(vault, amount);
+            asset.transferIn(gateway, amount);
         }
 
         uint256 stTotal = stTotalAmount;
@@ -57,7 +57,7 @@ contract VaultImplementationNone is VaultStorage {
         stTotalAmount += mintedSt;
     }
 
-    function redeem(uint256 dTokenId, uint256 amount) external _onlyVault_ returns (uint256 redeemedAmount) {
+    function redeem(uint256 dTokenId, uint256 amount) external _onlyGateway_ returns (uint256 redeemedAmount) {
         uint256 stAmount = stAmounts[dTokenId];
         uint256 stTotal = stTotalAmount;
 
@@ -69,7 +69,7 @@ contract VaultImplementationNone is VaultStorage {
         stAmounts[dTokenId] -= burnedSt;
         stTotalAmount -= burnedSt;
 
-        asset.transferOut(vault, redeemedAmount);
+        asset.transferOut(gateway, redeemedAmount);
     }
 
 }
