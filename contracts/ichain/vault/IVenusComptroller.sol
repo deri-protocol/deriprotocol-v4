@@ -2,7 +2,7 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-interface IComptroller {
+interface IVenusComptroller {
 
     function enterMarkets(address[] calldata vTokens) external returns (uint256[] memory errors);
 

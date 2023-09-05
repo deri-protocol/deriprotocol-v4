@@ -2,7 +2,11 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-interface IMarket {
+interface IVenusMarket {
+
+    function isVToken() external view returns (bool);
+
+    function underlying() external view returns (address);
 
     function exchangeRateStored() external view returns (uint256);
 

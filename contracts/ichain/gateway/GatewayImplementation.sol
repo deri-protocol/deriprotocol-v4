@@ -2,7 +2,8 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import './IVault.sol';
+import '../vault/IVault.sol';
+import './IGateway.sol';
 import '../token/IDToken.sol';
 import '../token/IIOU.sol';
 import '../../oracle/IOracle.sol';
@@ -11,11 +12,9 @@ import '@openzeppelin/contracts/utils/cryptography/ECDSA.sol';
 import '../../library/Bytes32Map.sol';
 import '../../library/ETHAndERC20.sol';
 import '../../library/SafeMath.sol';
-import '../venus/VenusBnb.sol';
-import '../aave/AaveArbitrum.sol';
-import './VaultStorage.sol';
+import './GatewayStorage.sol';
 
-contract VaultImplementation is VaultStorage {
+contract GatewayImplementation is GatewayStorage {
 
     using Bytes32Map for mapping(uint8 => bytes32);
     using ETHAndERC20 for address;
@@ -35,7 +34,7 @@ contract VaultImplementation is VaultStorage {
     error InsufficientMargin();
     error InvalidSignature();
 
-    event AddBToken(address bToken, uint256 custodian, bytes32 oracleId, uint256 collateralFactor);
+    event AddBToken(address bToken, address vault, bytes32 oracleId, uint256 collateralFactor);
 
     event DelBToken(address bToken);
 
@@ -46,7 +45,7 @@ contract VaultImplementation is VaultStorage {
         uint256 lTokenId,
         uint256 liquidity,
         int256  lastCumulativePnlOnEngine,
-        int256  cumulativePnlOnVault,
+        int256  cumulativePnlOnGateway,
         uint256 removeBAmount
     );
 
@@ -55,7 +54,7 @@ contract VaultImplementation is VaultStorage {
         uint256 pTokenId,
         uint256 margin,
         int256  lastCumulativePnlOnEngine,
-        int256  cumulativePnlOnVault,
+        int256  cumulativePnlOnGateway,
         uint256 bAmount
     );
 
@@ -64,7 +63,7 @@ contract VaultImplementation is VaultStorage {
         uint256 pTokenId,
         uint256 margin,
         int256  lastCumulativePnlOnEngine,
-        int256  cumulativePnlOnVault,
+        int256  cumulativePnlOnGateway,
         bytes32 symbolId,
         int256[] tradeParams
     );
@@ -74,7 +73,7 @@ contract VaultImplementation is VaultStorage {
         uint256 pTokenId,
         uint256 margin,
         int256  lastCumulativePnlOnEngine,
-        int256  cumulativePnlOnVault
+        int256  cumulativePnlOnGateway
     );
 
     event RequestTradeAndRemoveMargin(
@@ -82,7 +81,7 @@ contract VaultImplementation is VaultStorage {
         uint256 pTokenId,
         uint256 margin,
         int256  lastCumulativePnlOnEngine,
-        int256  cumulativePnlOnVault,
+        int256  cumulativePnlOnGateway,
         uint256 bAmount,
         bytes32 symbolId,
         int256[] tradeParams
@@ -124,30 +123,22 @@ contract VaultImplementation is VaultStorage {
         int256  lpPnl
     );
 
-    uint8 constant S_ST0AMOUNT                  = 1;
-    uint8 constant S_CUMULATIVEPNLONVAULT       = 2;
-    uint8 constant S_LIQUIDITYTIME              = 3;
-    uint8 constant S_TOTALLIQUIDITY             = 4;
-    uint8 constant S_CUMULATIVETIMEPERLIQUIDITY = 5;
+    uint8 constant S_CUMULATIVEPNLONGATEWAY   = 1;
+    uint8 constant S_LIQUIDITYTIME              = 2;
+    uint8 constant S_TOTALLIQUIDITY             = 3;
+    uint8 constant S_CUMULATIVETIMEPERLIQUIDITY = 4;
 
-    uint8 constant B_INITIALIZED       = 1;
-    uint8 constant B_CUSTODIAN         = 2;
-    uint8 constant B_ORACLEID          = 3;
-    uint8 constant B_COLLECTERALFACTOR = 4;
-    uint8 constant B_STTOTALAMOUNT     = 5;
+    uint8 constant B_VAULT             = 1;
+    uint8 constant B_ORACLEID          = 2;
+    uint8 constant B_COLLECTERALFACTOR = 3;
 
     uint8 constant D_REQUESTID                      = 1;
     uint8 constant D_BTOKEN                         = 2;
-    uint8 constant D_STAMOUNT                       = 3;
-    uint8 constant D_B0AMOUNT                       = 4;
-    uint8 constant D_LASTCUMULATIVEPNLONENGINE      = 5;
-    uint8 constant D_LIQUIDITY                      = 6;
-    uint8 constant D_CUMULATIVETIME                 = 7;
-    uint8 constant D_LASTCUMULATIVETIMEPERLIQUIDITY = 8;
-
-    uint256 constant CUSTODIAN_NONE         = 1;
-    uint256 constant CUSTODIAN_VENUSBNB     = 2;
-    uint256 constant CUSTODIAN_AAVEARBITRUM = 3;
+    uint8 constant D_B0AMOUNT                       = 3;
+    uint8 constant D_LASTCUMULATIVEPNLONENGINE      = 4;
+    uint8 constant D_LIQUIDITY                      = 5;
+    uint8 constant D_CUMULATIVETIME                 = 6;
+    uint8 constant D_LASTCUMULATIVETIMEPERLIQUIDITY = 7;
 
     uint256 constant UONE = 1e18;
     int256  constant ONE = 1e18;
@@ -157,10 +148,11 @@ contract VaultImplementation is VaultStorage {
     IDToken  internal immutable pToken;
     IOracle  internal immutable oracle;
     ISwapper internal immutable swapper;
+    IVault   internal immutable vault0;
     IIOU     internal immutable iou;
     address  internal immutable tokenB0;
+    address  internal immutable dChainEventSigner;
     uint8    internal immutable decimalsB0;
-    address  internal immutable eventSigner;
     uint256  internal immutable b0ReserveRatio;
     int256   internal immutable liquidationRewardCutRatio;
     int256   internal immutable minLiquidationReward;
@@ -171,9 +163,10 @@ contract VaultImplementation is VaultStorage {
         address pToken_,
         address oracle_,
         address swapper_,
+        address vault0_,
         address iou_,
         address tokenB0_,
-        address eventSigner_,
+        address dChainEventSigner_,
         uint256 b0ReserveRatio_,
         int256  liquidationRewardCutRatio_,
         int256  minLiquidationReward_,
@@ -183,10 +176,11 @@ contract VaultImplementation is VaultStorage {
         pToken = IDToken(pToken_);
         oracle = IOracle(oracle_);
         swapper = ISwapper(swapper_);
+        vault0 = IVault(vault0_);
         iou = IIOU(iou_);
         tokenB0 = tokenB0_;
         decimalsB0 = tokenB0_.decimals();
-        eventSigner = eventSigner_;
+        dChainEventSigner = dChainEventSigner_;
         b0ReserveRatio = b0ReserveRatio_;
         liquidationRewardCutRatio = liquidationRewardCutRatio_;
         minLiquidationReward = minLiquidationReward_;
@@ -197,41 +191,36 @@ contract VaultImplementation is VaultStorage {
     // Getters
     //================================================================================
 
-    function getVaultParam() external view returns (IVault.VaultParam memory p) {
+    function getGatewayParam() external view returns (IGateway.GatewayParam memory p) {
         p.lToken = address(lToken);
         p.pToken = address(pToken);
         p.oracle = address(oracle);
         p.swapper = address(swapper);
         p.iou = address(iou);
         p.tokenB0 = tokenB0;
-        p.eventSigner = eventSigner;
+        p.dChainEventSigner = dChainEventSigner;
         p.b0ReserveRatio = b0ReserveRatio;
         p.liquidationRewardCutRatio = liquidationRewardCutRatio;
         p.minLiquidationReward = minLiquidationReward;
         p.maxLiquidationReward = maxLiquidationReward;
     }
 
-    function getVaultState() external view returns (IVault.VaultState memory s) {
-        s.st0Amount = _vaultStates.getUint(S_ST0AMOUNT);
-        s.cumulativePnlOnVault = _vaultStates.getInt(S_CUMULATIVEPNLONVAULT);
-        s.liquidityTime = _vaultStates.getUint(S_LIQUIDITYTIME);
-        s.totalLiquidity = _vaultStates.getUint(S_TOTALLIQUIDITY);
-        s.cumulativeTimePerLiquidity = _vaultStates.getInt(S_CUMULATIVETIMEPERLIQUIDITY);
+    function getGatewayState() external view returns (IGateway.GatewayState memory s) {
+        s.cumulativePnlOnGateway = _gatewayStates.getInt(S_CUMULATIVEPNLONGATEWAY);
+        s.liquidityTime = _gatewayStates.getUint(S_LIQUIDITYTIME);
+        s.totalLiquidity = _gatewayStates.getUint(S_TOTALLIQUIDITY);
+        s.cumulativeTimePerLiquidity = _gatewayStates.getInt(S_CUMULATIVETIMEPERLIQUIDITY);
     }
 
-    function getBTokenState(address bToken) external view returns (IVault.BTokenState memory s) {
-        s.bToken = bToken;
-        s.initialized = _bTokenStates[bToken].getBool(B_INITIALIZED);
-        s.custodian = _bTokenStates[bToken].getUint(B_CUSTODIAN);
+    function getBTokenState(address bToken) external view returns (IGateway.BTokenState memory s) {
+        s.vault = _bTokenStates[bToken].getAddress(B_VAULT);
         s.oracleId = _bTokenStates[bToken].getBytes32(B_ORACLEID);
         s.collateralFactor = _bTokenStates[bToken].getUint(B_COLLECTERALFACTOR);
-        s.stTotalAmount = _bTokenStates[bToken].getUint(B_STTOTALAMOUNT);
     }
 
-    function getLpState(uint256 lTokenId) external view returns (IVault.LpState memory s) {
+    function getLpState(uint256 lTokenId) external view returns (IGateway.LpState memory s) {
         s.requestId = _dTokenStates[lTokenId].getUint(D_REQUESTID);
         s.bToken = _dTokenStates[lTokenId].getAddress(D_BTOKEN);
-        s.stAmount = _dTokenStates[lTokenId].getUint(D_STAMOUNT);
         s.b0Amount = _dTokenStates[lTokenId].getInt(D_B0AMOUNT);
         s.lastCumulativePnlOnEngine = _dTokenStates[lTokenId].getInt(D_LASTCUMULATIVEPNLONENGINE);
         s.liquidity = _dTokenStates[lTokenId].getUint(D_LIQUIDITY);
@@ -239,10 +228,9 @@ contract VaultImplementation is VaultStorage {
         s.lastCumulativeTimePerLiquidity = _dTokenStates[lTokenId].getUint(D_LASTCUMULATIVETIMEPERLIQUIDITY);
     }
 
-    function getTdState(uint256 pTokenId) external view returns (IVault.TdState memory s) {
+    function getTdState(uint256 pTokenId) external view returns (IGateway.TdState memory s) {
         s.requestId = _dTokenStates[pTokenId].getUint(D_REQUESTID);
         s.bToken = _dTokenStates[pTokenId].getAddress(D_BTOKEN);
-        s.stAmount = _dTokenStates[pTokenId].getUint(D_STAMOUNT);
         s.b0Amount = _dTokenStates[pTokenId].getInt(D_B0AMOUNT);
         s.lastCumulativePnlOnEngine = _dTokenStates[pTokenId].getInt(D_LASTCUMULATIVEPNLONENGINE);
     }
@@ -250,9 +238,9 @@ contract VaultImplementation is VaultStorage {
     function getCumulativeTime(uint256 lTokenId)
     public view returns (uint256 cumulativeTimePerLiquidity, uint256 cumulativeTime)
     {
-        uint256 liquidityTime = _vaultStates.getUint(S_LIQUIDITYTIME);
-        uint256 totalLiquidity = _vaultStates.getUint(S_TOTALLIQUIDITY);
-        cumulativeTimePerLiquidity = _vaultStates.getUint(S_CUMULATIVETIMEPERLIQUIDITY);
+        uint256 liquidityTime = _gatewayStates.getUint(S_LIQUIDITYTIME);
+        uint256 totalLiquidity = _gatewayStates.getUint(S_TOTALLIQUIDITY);
+        cumulativeTimePerLiquidity = _gatewayStates.getUint(S_CUMULATIVETIMEPERLIQUIDITY);
         uint256 liquidity = _dTokenStates[lTokenId].getUint(D_LIQUIDITY);
         cumulativeTime = _dTokenStates[lTokenId].getUint(D_CUMULATIVETIME);
         uint256 lastCumulativeTimePerLiquidity = _dTokenStates[lTokenId].getUint(D_LASTCUMULATIVETIMEPERLIQUIDITY);
@@ -275,48 +263,41 @@ contract VaultImplementation is VaultStorage {
 
     function addBToken(
         address bToken,
-        uint256 custodian,
+        address vault,
         bytes32 oracleId,
         uint256 collateralFactor
     ) external _onlyAdmin_ {
-        if (_bTokenStates[bToken].getBool(B_INITIALIZED)) {
+        if (_bTokenStates[bToken].getAddress(B_VAULT) != address(0)) {
             revert BTokenDupInitialize();
+        }
+        if (IVault(vault).asset() != bToken) {
+            revert InvalidBToken();
         }
         if (bToken != tokenETH) {
             if (!swapper.isSupportedToken(bToken)) {
                 revert BTokenNoSwapper();
             }
             bToken.approveMax(address(swapper));
+            bToken.approveMax(vault);
         }
         if (oracle.getValue(oracleId) == 0) {
             revert BTokenNoOracle();
         }
-        _bTokenStates[bToken].set(B_INITIALIZED, true);
-        _bTokenStates[bToken].set(B_CUSTODIAN, custodian);
+        _bTokenStates[bToken].set(B_VAULT, vault);
         _bTokenStates[bToken].set(B_ORACLEID, oracleId);
         _bTokenStates[bToken].set(B_COLLECTERALFACTOR, collateralFactor);
 
-        if (custodian == CUSTODIAN_VENUSBNB) {
-            VenusBnb.enterMarket(bToken);
-        } else if (custodian == CUSTODIAN_AAVEARBITRUM) {
-            AaveArbitrum.enterMarket(bToken);
-        }
-
-        emit AddBToken(bToken, custodian, oracleId, collateralFactor);
+        emit AddBToken(bToken, vault, oracleId, collateralFactor);
     }
 
     function delBToken(address bToken) external _onlyAdmin_ {
-        if (_bTokenStates[bToken].getUint(B_STTOTALAMOUNT) != 0) {
+        if (IVault(_bTokenStates[bToken].getAddress(B_VAULT)).stTotalAmount() != 0) {
             revert CannotDelBToken();
         }
-        _bTokenStates[bToken].set(B_INITIALIZED, false);
 
-        uint256 custodian = _bTokenStates[bToken].getUint(B_CUSTODIAN);
-        if (custodian == CUSTODIAN_VENUSBNB) {
-            VenusBnb.exitMarket(bToken);
-        } else if (custodian == CUSTODIAN_AAVEARBITRUM) {
-            AaveArbitrum.exitMarket(bToken);
-        }
+        _bTokenStates[bToken].del(B_VAULT);
+        _bTokenStates[bToken].del(B_ORACLEID);
+        _bTokenStates[bToken].del(B_COLLECTERALFACTOR);
 
         emit DelBToken(bToken);
     }
@@ -332,16 +313,11 @@ contract VaultImplementation is VaultStorage {
 
     function redeemIOU(uint256 b0Amount) external {
         if (b0Amount > 0) {
-            Data memory data;
-            data.st0Amount = _vaultStates.getUint(S_ST0AMOUNT);
-            data.st0TotalAmount = _bTokenStates[tokenB0].getUint(B_STTOTALAMOUNT);
-            uint256 b0Redeemed = _redeemReserveB0(data, b0Amount);
+            uint256 b0Redeemed = vault0.redeem(uint256(0), b0Amount);
             if (b0Redeemed > 0) {
-                tokenB0.transferOut(msg.sender, b0Redeemed);
                 iou.burn(msg.sender, b0Redeemed);
+                tokenB0.transferOut(msg.sender, b0Redeemed);
             }
-            _vaultStates.set(S_ST0AMOUNT, data.st0Amount);
-            _bTokenStates[tokenB0].set(B_STTOTALAMOUNT, data.st0TotalAmount);
         }
     }
 
@@ -352,13 +328,14 @@ contract VaultImplementation is VaultStorage {
             _checkLTokenIdOwner(lTokenId, msg.sender);
         }
         _checkBTokenInitialized(bToken);
-        if (bToken == tokenETH) {
-            bAmount = msg.value;
-        }
 
         Data memory data = _getData(msg.sender, lTokenId, bToken);
 
-        bToken.transferIn(data.account, bAmount);
+        if (bToken == tokenETH) {
+            bAmount = msg.value;
+        } else {
+            bToken.transferIn(data.account, bAmount);
+        }
         _deposit(data, bAmount);
         _getExParams(data);
         uint256 newLiquidity = _getDTokenLiquidity(data);
@@ -371,7 +348,7 @@ contract VaultImplementation is VaultStorage {
             lTokenId,
             newLiquidity,
             data.lastCumulativePnlOnEngine,
-            data.cumulativePnlOnVault,
+            data.cumulativePnlOnGateway,
             0
         );
     }
@@ -383,7 +360,7 @@ contract VaultImplementation is VaultStorage {
         _getExParams(data);
         uint256 oldLiquidity = _getDTokenLiquidity(data);
         uint256 newLiquidity = _getDTokenLiquidityWithRemove(data, bAmount);
-        if (newLiquidity <= oldLiquidity / 20) {
+        if (newLiquidity <= oldLiquidity / 100) {
             newLiquidity = 0;
         }
 
@@ -393,7 +370,7 @@ contract VaultImplementation is VaultStorage {
             lTokenId,
             newLiquidity,
             data.lastCumulativePnlOnEngine,
-            data.cumulativePnlOnVault,
+            data.cumulativePnlOnGateway,
             bAmount
         );
     }
@@ -405,12 +382,14 @@ contract VaultImplementation is VaultStorage {
             _checkPTokenIdOwner(pTokenId, msg.sender);
         }
         _checkBTokenInitialized(bToken);
-        if (bToken == tokenETH) {
-            bAmount = msg.value;
-        }
 
         Data memory data = _getData(msg.sender, pTokenId, bToken);
-        bToken.transferIn(data.account, bAmount);
+
+        if (bToken == tokenETH) {
+            bAmount = msg.value;
+        } else {
+            bToken.transferIn(data.account, bAmount);
+        }
         _deposit(data, bAmount);
 
         _saveData(data);
@@ -433,7 +412,7 @@ contract VaultImplementation is VaultStorage {
         _getExParams(data);
         uint256 oldMargin = _getDTokenLiquidity(data);
         uint256 newMargin = _getDTokenLiquidityWithRemove(data, bAmount);
-        if (newMargin <= oldMargin / 20) {
+        if (newMargin <= oldMargin / 100) {
             newMargin = 0;
         }
 
@@ -443,7 +422,7 @@ contract VaultImplementation is VaultStorage {
             pTokenId,
             newMargin,
             data.lastCumulativePnlOnEngine,
-            data.cumulativePnlOnVault,
+            data.cumulativePnlOnGateway,
             bAmount
         );
     }
@@ -461,7 +440,7 @@ contract VaultImplementation is VaultStorage {
             pTokenId,
             margin,
             data.lastCumulativePnlOnEngine,
-            data.cumulativePnlOnVault,
+            data.cumulativePnlOnGateway,
             symbolId,
             tradeParams
         );
@@ -478,7 +457,7 @@ contract VaultImplementation is VaultStorage {
             pTokenId,
             margin,
             data.lastCumulativePnlOnEngine,
-            data.cumulativePnlOnVault
+            data.cumulativePnlOnGateway
         );
     }
 
@@ -506,7 +485,7 @@ contract VaultImplementation is VaultStorage {
         _getExParams(data);
         uint256 oldMargin = _getDTokenLiquidity(data);
         uint256 newMargin = _getDTokenLiquidityWithRemove(data, bAmount);
-        if (newMargin <= oldMargin / 20) {
+        if (newMargin <= oldMargin / 100) {
             newMargin = 0;
         }
 
@@ -516,7 +495,7 @@ contract VaultImplementation is VaultStorage {
             pTokenId,
             newMargin,
             data.lastCumulativePnlOnEngine,
-            data.cumulativePnlOnVault,
+            data.cumulativePnlOnGateway,
             bAmount,
             symbolId,
             tradeParams
@@ -525,7 +504,7 @@ contract VaultImplementation is VaultStorage {
 
     function finishAddLiquidity(bytes memory eventData, bytes memory signature) external {
         _verifyEventData(eventData, signature);
-        IVault.VarOnExecuteAddLiquidity memory v = abi.decode(eventData, (IVault.VarOnExecuteAddLiquidity));
+        IGateway.VarOnExecuteAddLiquidity memory v = abi.decode(eventData, (IGateway.VarOnExecuteAddLiquidity));
         _checkRequestId(v.lTokenId, v.requestId);
 
         _updateLiquidity(v.lTokenId, v.liquidity, v.totalLiquidity);
@@ -548,7 +527,7 @@ contract VaultImplementation is VaultStorage {
 
     function finishRemoveLiquidity(bytes memory eventData, bytes memory signature) external _reentryLock_ {
         _verifyEventData(eventData, signature);
-        IVault.VarOnExecuteRemoveLiquidity memory v = abi.decode(eventData, (IVault.VarOnExecuteRemoveLiquidity));
+        IGateway.VarOnExecuteRemoveLiquidity memory v = abi.decode(eventData, (IGateway.VarOnExecuteRemoveLiquidity));
         _checkRequestId(v.lTokenId, v.requestId);
 
         _updateLiquidity(v.lTokenId, v.liquidity, v.totalLiquidity);
@@ -559,7 +538,7 @@ contract VaultImplementation is VaultStorage {
         data.lastCumulativePnlOnEngine = v.cumulativePnlOnEngine;
 
         _getExParams(data);
-        uint256 bAmount = _transferOut(data, v.liquidity == 0 ? type(uint256).max : v.bAmount, false);
+        uint256 bAmount = v.bAmount == 0 ? 0 : _transferOut(data, v.liquidity == 0 ? type(uint256).max : v.bAmount, false);
 
         _saveData(data);
 
@@ -575,7 +554,7 @@ contract VaultImplementation is VaultStorage {
 
     function finishRemoveMargin(bytes memory eventData, bytes memory signature) external _reentryLock_ {
         _verifyEventData(eventData, signature);
-        IVault.VarOnExecuteRemoveMargin memory v = abi.decode(eventData, (IVault.VarOnExecuteRemoveMargin));
+        IGateway.VarOnExecuteRemoveMargin memory v = abi.decode(eventData, (IGateway.VarOnExecuteRemoveMargin));
         _checkRequestId(v.pTokenId, v.requestId);
 
         Data memory data = _getData(pToken.ownerOf(v.pTokenId), v.pTokenId, _dTokenStates[v.pTokenId].getAddress(D_BTOKEN));
@@ -602,7 +581,7 @@ contract VaultImplementation is VaultStorage {
 
     function finishLiquidate(bytes memory eventData, bytes memory signature) external _reentryLock_ {
         _verifyEventData(eventData, signature);
-        IVault.VarOnExecuteLiquidate memory v = abi.decode(eventData, (IVault.VarOnExecuteLiquidate));
+        IGateway.VarOnExecuteLiquidate memory v = abi.decode(eventData, (IGateway.VarOnExecuteLiquidate));
 
         Data memory data = _getData(pToken.ownerOf(v.pTokenId), v.pTokenId, _dTokenStates[v.pTokenId].getAddress(D_BTOKEN));
         int256 diff = v.cumulativePnlOnEngine.minusUnchecked(data.lastCumulativePnlOnEngine);
@@ -610,8 +589,9 @@ contract VaultImplementation is VaultStorage {
         data.lastCumulativePnlOnEngine = v.cumulativePnlOnEngine;
 
         uint256 b0AmountIn;
-        if (data.stAmount > 0) {
-            uint256 bAmount = _redeem(data.bToken, data.stAmount, data.stTotalAmount);
+
+        {
+            uint256 bAmount = IVault(data.vault).redeem(data.dTokenId, type(uint256).max);
             if (data.bToken == tokenB0) {
                 b0AmountIn += bAmount;
             } else if (data.bToken == tokenETH) {
@@ -641,7 +621,7 @@ contract VaultImplementation is VaultStorage {
                 tokenB0.transferOut(msg.sender, uReward);
                 b0AmountIn -= uReward;
             } else {
-                uint256 b0Redeemed = _redeemReserveB0(data, uReward - b0AmountIn);
+                uint256 b0Redeemed = vault0.redeem(uint256(0), uReward - b0AmountIn);
                 tokenB0.transferOut(msg.sender, b0AmountIn + b0Redeemed);
                 reward = (b0AmountIn + b0Redeemed).utoi();
                 b0AmountIn = 0;
@@ -651,10 +631,10 @@ contract VaultImplementation is VaultStorage {
         }
 
         if (b0AmountIn > 0) {
-            _depositReserveB0(data, b0AmountIn);
+            vault0.deposit(uint256(0), b0AmountIn);
         }
 
-        data.cumulativePnlOnVault = data.cumulativePnlOnVault.addUnchecked(lpPnl.rescale(decimalsB0, 18));
+        data.cumulativePnlOnGateway = data.cumulativePnlOnGateway.addUnchecked(lpPnl.rescale(decimalsB0, 18));
         data.b0Amount = 0;
         _saveData(data);
         pToken.burn(v.pTokenId);
@@ -675,17 +655,13 @@ contract VaultImplementation is VaultStorage {
         uint256 dTokenId;
         address bToken;
 
-        uint256 st0Amount;
-        int256  cumulativePnlOnVault;
-        uint256 st0TotalAmount;
-        uint256 stTotalAmount;
+        int256  cumulativePnlOnGateway;
+        address vault;
 
-        uint256 stAmount;
         int256  b0Amount;
         int256  lastCumulativePnlOnEngine;
 
         uint256 collateralFactor;
-        uint256 stExRate;
         uint256 bPrice;
     }
 
@@ -694,28 +670,20 @@ contract VaultImplementation is VaultStorage {
         data.dTokenId = dTokenId;
         data.bToken = bToken;
 
-        data.st0Amount = _vaultStates.getUint(S_ST0AMOUNT);
-        data.cumulativePnlOnVault = _vaultStates.getInt(S_CUMULATIVEPNLONVAULT);
-        data.st0TotalAmount = _bTokenStates[tokenB0].getUint(B_STTOTALAMOUNT);
-        data.stTotalAmount = _bTokenStates[bToken].getUint(B_STTOTALAMOUNT);
+        data.cumulativePnlOnGateway = _gatewayStates.getInt(S_CUMULATIVEPNLONGATEWAY);
+        data.vault = _bTokenStates[bToken].getAddress(B_VAULT);
 
-        data.stAmount = _dTokenStates[dTokenId].getUint(D_STAMOUNT);
         data.b0Amount = _dTokenStates[dTokenId].getInt(D_B0AMOUNT);
         data.lastCumulativePnlOnEngine = _dTokenStates[dTokenId].getInt(D_LASTCUMULATIVEPNLONENGINE);
 
-        if (data.stAmount != 0) {
+        if (IVault(data.vault).stAmounts(dTokenId) != 0) {
             _checkBTokenConsistency(dTokenId, bToken);
         }
     }
 
     function _saveData(Data memory data) internal {
-        _vaultStates.set(S_ST0AMOUNT, data.st0Amount);
-        _vaultStates.set(S_CUMULATIVEPNLONVAULT, data.cumulativePnlOnVault);
-        _bTokenStates[tokenB0].set(B_STTOTALAMOUNT, data.st0TotalAmount);
-        _bTokenStates[data.bToken].set(B_STTOTALAMOUNT, data.stTotalAmount);
-
+        _gatewayStates.set(S_CUMULATIVEPNLONGATEWAY, data.cumulativePnlOnGateway);
         _dTokenStates[data.dTokenId].set(D_BTOKEN, data.bToken);
-        _dTokenStates[data.dTokenId].set(D_STAMOUNT, data.stAmount);
         _dTokenStates[data.dTokenId].set(D_B0AMOUNT, data.b0Amount);
         _dTokenStates[data.dTokenId].set(D_LASTCUMULATIVEPNLONENGINE, data.lastCumulativePnlOnEngine);
     }
@@ -733,7 +701,7 @@ contract VaultImplementation is VaultStorage {
     }
 
     function _checkBTokenInitialized(address bToken) internal view {
-        if (!_bTokenStates[bToken].getBool(B_INITIALIZED)) {
+        if (_bTokenStates[bToken].getAddress(B_VAULT) == address(0)) {
             revert InvalidBToken();
         }
     }
@@ -756,25 +724,6 @@ contract VaultImplementation is VaultStorage {
         }
     }
 
-    // stExRate * stAmount / UONE = bAmount, bAmount in decimalsB
-    function _getStExRate(address bToken, uint256 stTotalAmount) internal view returns (uint256 stExRate) {
-        uint256 custodian = _bTokenStates[bToken].getUint(B_CUSTODIAN);
-        if (custodian == CUSTODIAN_NONE) {
-            if (stTotalAmount != 0) {
-                stExRate = bToken.balanceOfThis() * UONE / stTotalAmount;
-            }
-        }
-        else if (custodian == CUSTODIAN_VENUSBNB) {
-            stExRate = VenusBnb.getStExRate(bToken, stTotalAmount);
-        }
-        else if (custodian == CUSTODIAN_AAVEARBITRUM) {
-            stExRate = AaveArbitrum.getStExRate(bToken, stTotalAmount);
-        }
-        else {
-            revert InvalidCustodian();
-        }
-    }
-
     // bPrice * bAmount / UONE = b0Amount, b0Amount in decimalsB0
     function _getBPrice(address bToken) internal view returns (uint256 bPrice) {
         if (bToken == tokenB0) {
@@ -790,31 +739,30 @@ contract VaultImplementation is VaultStorage {
 
     function _getExParams(Data memory data) internal view {
         data.collateralFactor = _bTokenStates[data.bToken].getUint(B_COLLECTERALFACTOR);
-        data.stExRate = _getStExRate(data.bToken, data.stTotalAmount);
         data.bPrice = _getBPrice(data.bToken);
     }
 
     // liquidity is in decimals18
     function _getDTokenLiquidity(Data memory data) internal view returns (uint256 liquidity) {
         uint256 liquidityInB0 = (
-            data.stAmount * data.stExRate / UONE * data.bPrice / UONE * data.collateralFactor / UONE
+            IVault(data.vault).getBalance(data.dTokenId) * data.bPrice / UONE * data.collateralFactor / UONE
         ).add(data.b0Amount);
         return liquidityInB0.rescale(decimalsB0, 18);
     }
 
     function _getDTokenLiquidityWithRemove(Data memory data, uint256 bAmount) internal view returns (uint256 liquidity) {
         if (bAmount < type(uint256).max / data.bPrice) { // make sure bAmount * bPrice won't overflow
-            uint256 bAmountInCustodian = data.stAmount * data.stExRate / UONE;
-            if (bAmount >= bAmountInCustodian) {
+            uint256 bAmountInVault = IVault(data.vault).getBalance(data.dTokenId);
+            if (bAmount >= bAmountInVault) {
                 if (data.b0Amount > 0) {
-                    uint256 b0Shortage = (bAmount - bAmountInCustodian) * data.bPrice / UONE;
+                    uint256 b0Shortage = (bAmount - bAmountInVault) * data.bPrice / UONE;
                     uint256 b0Amount = data.b0Amount.itou();
                     if (b0Amount > b0Shortage) {
                         liquidity = (b0Amount - b0Shortage).rescale(decimalsB0, 18);
                     }
                 }
             } else {
-                uint256 b0Excessive = (bAmountInCustodian - bAmount) * data.bPrice / UONE * data.collateralFactor / UONE; // discounted
+                uint256 b0Excessive = (bAmountInVault - bAmount) * data.bPrice / UONE * data.collateralFactor / UONE; // discounted
                 if (data.b0Amount >= 0) {
                     liquidity = b0Excessive.add(data.b0Amount).rescale(decimalsB0, 18);
                 } else {
@@ -827,126 +775,16 @@ contract VaultImplementation is VaultStorage {
         }
     }
 
-    function _deposit(address bToken, uint256 bAmount, uint256 stTotalAmount)
-    internal returns (uint256 stMinted)
-    {
-        if (bAmount != 0) {
-            uint256 custodian = _bTokenStates[bToken].getUint(B_CUSTODIAN);
-            if (custodian == CUSTODIAN_NONE) {
-                if (stTotalAmount == 0) {
-                    stMinted = bAmount.rescale(bToken.decimals(), 18);
-                } else {
-                    stMinted = bAmount * stTotalAmount / (bToken.balanceOfThis() - bAmount);
-                }
-            }
-            else if (custodian == CUSTODIAN_VENUSBNB) {
-                stMinted = VenusBnb.deposit(bToken, bAmount, stTotalAmount);
-            }
-            else if (custodian == CUSTODIAN_AAVEARBITRUM) {
-                stMinted = AaveArbitrum.deposit(bToken, bAmount, stTotalAmount);
-            }
-            else {
-                revert InvalidCustodian();
-            }
-        }
-    }
-
-    function _redeem(address bToken, uint256 stAmount, uint256 stTotalAmount)
-    internal returns (uint256 bRedeemed)
-    {
-        if (stTotalAmount != 0 && stAmount != 0) {
-            uint256 custodian = _bTokenStates[bToken].getUint(B_CUSTODIAN);
-            if (custodian == CUSTODIAN_NONE) {
-                bRedeemed = bToken.balanceOfThis() * stAmount / stTotalAmount;
-            }
-            else if (custodian == CUSTODIAN_VENUSBNB) {
-                bRedeemed = VenusBnb.redeem(bToken, stAmount, stTotalAmount);
-            }
-            else if (custodian == CUSTODIAN_AAVEARBITRUM) {
-                bRedeemed = AaveArbitrum.redeem(bToken, stAmount, stTotalAmount);
-            }
-            else {
-                revert InvalidCustodian();
-            }
-        }
-    }
-
-    function _redeemBToken(address bToken, uint256 bAmount, uint256 stTotalAmount)
-    internal returns (uint256 stBurned)
-    {
-        if (stTotalAmount != 0 && bAmount != 0) {
-            uint256 custodian = _bTokenStates[bToken].getUint(B_CUSTODIAN);
-            if (custodian == CUSTODIAN_NONE) {
-                stBurned = bAmount * stTotalAmount / bToken.balanceOfThis();
-            }
-            else if (custodian == CUSTODIAN_VENUSBNB) {
-                stBurned = VenusBnb.redeemBToken(bToken, bAmount, stTotalAmount);
-            }
-            else if (custodian == CUSTODIAN_AAVEARBITRUM) {
-                stBurned = AaveArbitrum.redeemBToken(bToken, bAmount, stTotalAmount);
-            }
-            else {
-                revert InvalidCustodian();
-            }
-        }
-    }
-
     function _deposit(Data memory data, uint256 bAmount) internal {
-        uint256 stMinted = _deposit(data.bToken, bAmount, data.stTotalAmount);
-        data.stTotalAmount += stMinted;
         if (data.bToken == tokenB0) {
-            uint256 stReserved = stMinted * b0ReserveRatio / UONE;
-            uint256 b0Reserved = bAmount * b0ReserveRatio / UONE;
-            data.st0Amount += stReserved;
-            data.st0TotalAmount = data.stTotalAmount;
-            data.stAmount += stMinted - stReserved;
-            data.b0Amount += b0Reserved.utoi();
+            uint256 reserved = bAmount * b0ReserveRatio / UONE;
+            bAmount -= reserved;
+            vault0.deposit(uint256(0), reserved);
+        }
+        if (data.bToken == tokenETH) {
+            IVault(data.vault).deposit{value: bAmount}(data.dTokenId, bAmount);
         } else {
-            data.stAmount += stMinted;
-        }
-    }
-
-    function _redeem(Data memory data, uint256 bAmount) internal returns (uint256 bRedeemed) {
-        uint256 bAmountInCustodian = data.stAmount * data.stExRate / UONE;
-        if (bAmount >= bAmountInCustodian) {
-            bRedeemed = _redeem(data.bToken, data.stAmount, data.stTotalAmount);
-            data.stTotalAmount -= data.stAmount;
-            data.stAmount = 0;
-        } else {
-            uint256 stBurned = _redeemBToken(data.bToken, bAmount, data.stTotalAmount);
-            data.stTotalAmount -= stBurned;
-            data.stAmount -= stBurned;
-            bRedeemed = bAmount;
-        }
-        if (data.bToken == tokenB0) {
-            data.st0TotalAmount = data.stTotalAmount;
-        }
-    }
-
-    function _depositReserveB0(Data memory data, uint256 b0Amount) internal {
-        uint256 st0Minted = _deposit(tokenB0, b0Amount, data.st0TotalAmount);
-        data.st0TotalAmount += st0Minted;
-        data.st0Amount += st0Minted;
-        if (data.bToken == tokenB0) {
-            data.stTotalAmount = data.st0TotalAmount;
-        }
-    }
-
-    function _redeemReserveB0(Data memory data, uint256 b0Amount) internal returns (uint256 b0Redeemed) {
-        uint256 st0ExRate = _getStExRate(tokenB0, data.st0TotalAmount);
-        uint256 b0AmountInCustodian = data.st0Amount * st0ExRate / UONE;
-        if (b0Amount >= b0AmountInCustodian) {
-            b0Redeemed = _redeem(tokenB0, data.st0Amount, data.st0TotalAmount);
-            data.st0TotalAmount -= data.st0Amount;
-            data.st0Amount = 0;
-        } else {
-            uint256 st0Burned = _redeemBToken(tokenB0, b0Amount, data.st0TotalAmount);
-            data.st0TotalAmount -= st0Burned;
-            data.st0Amount -= st0Burned;
-            b0Redeemed = b0Amount;
-        }
-        if (data.bToken == tokenB0) {
-            data.stTotalAmount = data.st0TotalAmount;
+            IVault(data.vault).deposit(data.dTokenId, bAmount);
         }
     }
 
@@ -962,9 +800,9 @@ contract VaultImplementation is VaultStorage {
             }
         }
 
-        bAmount = _redeem(data, bAmount); // bAmount now is the actually bToken redeemed
+        bAmount = IVault(data.vault).redeem(data.dTokenId, bAmount); // bAmount now is the actually bToken redeemed
         uint256 b0AmountIn;  // for b0 goes to reserves
-        uint256 b0AmountOut; // for b0 goes to user, (b0AmountIn + b0AmountOut) is the tokenB0 available currently in vault
+        uint256 b0AmountOut; // for b0 goes to user, (b0AmountIn + b0AmountOut) is the tokenB0 available currently in Gateway
         uint256 iouAmount; // iou amount goes to trader
 
         // fill b0Amount hole
@@ -1023,7 +861,7 @@ contract VaultImplementation is VaultStorage {
             if (amount > 0) {
                 uint256 tmpOut;
                 if (amount > b0AmountIn) {
-                    uint256 b0Redeemed = _redeemReserveB0(data, amount - b0AmountIn);
+                    uint256 b0Redeemed = vault0.redeem(uint256(0), amount - b0AmountIn);
                     if (isTd && b0Redeemed < amount - b0AmountIn) { // b0 insufficent
                         iouAmount = amount - b0AmountIn - b0Redeemed;
                     }
@@ -1039,7 +877,7 @@ contract VaultImplementation is VaultStorage {
         }
 
         if (b0AmountIn > 0) {
-            _depositReserveB0(data, b0AmountIn);
+            vault0.deposit(uint256(0), b0AmountIn);
         }
 
         // transfer b0, or swap b0 to current operating token
@@ -1074,9 +912,9 @@ contract VaultImplementation is VaultStorage {
 
     function _updateLiquidity(uint256 lTokenId, uint256 newLiquidity, uint256 newTotalLiquidity) internal {
         (uint256 cumulativeTimePerLiquidity, uint256 cumulativeTime) = getCumulativeTime(lTokenId);
-        _vaultStates.set(S_LIQUIDITYTIME, block.timestamp);
-        _vaultStates.set(S_TOTALLIQUIDITY, newTotalLiquidity);
-        _vaultStates.set(S_CUMULATIVETIMEPERLIQUIDITY, cumulativeTimePerLiquidity);
+        _gatewayStates.set(S_LIQUIDITYTIME, block.timestamp);
+        _gatewayStates.set(S_TOTALLIQUIDITY, newTotalLiquidity);
+        _gatewayStates.set(S_CUMULATIVETIMEPERLIQUIDITY, cumulativeTimePerLiquidity);
         _dTokenStates[lTokenId].set(D_LIQUIDITY, newLiquidity);
         _dTokenStates[lTokenId].set(D_CUMULATIVETIME, cumulativeTime);
         _dTokenStates[lTokenId].set(D_LASTCUMULATIVETIMEPERLIQUIDITY, cumulativeTimePerLiquidity);
@@ -1084,7 +922,7 @@ contract VaultImplementation is VaultStorage {
 
     function _verifyEventData(bytes memory eventData, bytes memory signature) internal view {
         bytes32 hash = ECDSA.toEthSignedMessageHash(keccak256(eventData));
-        if (ECDSA.recover(hash, signature) != eventSigner) {
+        if (ECDSA.recover(hash, signature) != dChainEventSigner) {
             revert InvalidSignature();
         }
     }

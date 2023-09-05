@@ -4,14 +4,12 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import '../../utils/Admin.sol';
 import '../../utils/Implementation.sol';
-import '../../utils/ReentryLock.sol';
 
-abstract contract VaultStorage is Admin, Implementation, ReentryLock {
+abstract contract VaultStorage is Admin, Implementation {
 
-    mapping(uint8 => bytes32) internal _vaultStates;
+    // dTokenId => stAmount
+    mapping(uint256 => uint256) public stAmounts;
 
-    mapping(address => mapping(uint8 => bytes32)) internal _bTokenStates;
-
-    mapping(uint256 => mapping(uint8 => bytes32)) internal _dTokenStates;
+    uint256 public stTotalAmount;
 
 }
