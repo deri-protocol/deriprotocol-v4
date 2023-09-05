@@ -221,6 +221,7 @@ contract GatewayImplementation is GatewayStorage {
     function getLpState(uint256 lTokenId) external view returns (IGateway.LpState memory s) {
         s.requestId = _dTokenStates[lTokenId].getUint(D_REQUESTID);
         s.bToken = _dTokenStates[lTokenId].getAddress(D_BTOKEN);
+        s.bAmount = IVault(_bTokenStates[s.bToken].getAddress(B_VAULT)).getBalance(lTokenId);
         s.b0Amount = _dTokenStates[lTokenId].getInt(D_B0AMOUNT);
         s.lastCumulativePnlOnEngine = _dTokenStates[lTokenId].getInt(D_LASTCUMULATIVEPNLONENGINE);
         s.liquidity = _dTokenStates[lTokenId].getUint(D_LIQUIDITY);
@@ -231,6 +232,7 @@ contract GatewayImplementation is GatewayStorage {
     function getTdState(uint256 pTokenId) external view returns (IGateway.TdState memory s) {
         s.requestId = _dTokenStates[pTokenId].getUint(D_REQUESTID);
         s.bToken = _dTokenStates[pTokenId].getAddress(D_BTOKEN);
+        s.bAmount = IVault(_bTokenStates[s.bToken].getAddress(B_VAULT)).getBalance(pTokenId);
         s.b0Amount = _dTokenStates[pTokenId].getInt(D_B0AMOUNT);
         s.lastCumulativePnlOnEngine = _dTokenStates[pTokenId].getInt(D_LASTCUMULATIVEPNLONENGINE);
     }

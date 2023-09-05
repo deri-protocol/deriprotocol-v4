@@ -34,6 +34,7 @@ interface IGateway {
     struct LpState {
         uint256 requestId;
         address bToken;
+        uint256 bAmount;
         int256  b0Amount;
         int256  lastCumulativePnlOnEngine;
         uint256 liquidity;
@@ -44,6 +45,7 @@ interface IGateway {
     struct TdState {
         uint256 requestId;
         address bToken;
+        uint256 bAmount;
         int256  b0Amount;
         int256  lastCumulativePnlOnEngine;
     }
