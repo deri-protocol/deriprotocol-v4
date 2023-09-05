@@ -103,7 +103,7 @@ contract GatewayImplementation is GatewayStorage {
         uint256 bAmount
     );
 
-    event AddMargin(
+    event FinishAddMargin(
         uint256 requestId,
         uint256 pTokenId,
         address bToken,
@@ -395,7 +395,7 @@ contract GatewayImplementation is GatewayStorage {
         _saveData(data);
 
         uint256 requestId = _incrementRequestId(pTokenId);
-        emit AddMargin(
+        emit FinishAddMargin(
             requestId,
             pTokenId,
             bToken,
