@@ -4,6 +4,11 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import '@openzeppelin/contracts/token/ERC20/ERC20.sol';
 
+/**
+ * @title IOU Token Contract
+ * @dev An ERC20 token used to represent IOUs issued to traders when B0 is insufficient on a specific i-chain.
+ *      Traders can later redeem these IOU tokens for B0 after a rebalance operation.
+ */
 contract IOU is ERC20 {
 
     error OnlyGateway();

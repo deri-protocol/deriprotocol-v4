@@ -22,6 +22,12 @@ abstract contract Admin {
         emit NewAdmin(admin);
     }
 
+    /**
+     * @notice Set a new admin for the contract.
+     * @dev This function allows the current admin to assign a new admin address without performing any explicit verification.
+     *      It's the current admin's responsibility to ensure that the 'newAdmin' address is correct and secure.
+     * @param newAdmin The address of the new admin.
+     */
     function setAdmin(address newAdmin) external _onlyAdmin_ {
         admin = newAdmin;
         emit NewAdmin(newAdmin);

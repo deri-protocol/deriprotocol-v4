@@ -50,21 +50,13 @@ interface IGateway {
         int256  lastCumulativePnlOnEngine;
     }
 
-    struct VarOnExecuteAddLiquidity {
+    struct VarOnExecuteUpdateLiquidity {
         uint256 requestId;
         uint256 lTokenId;
         uint256 liquidity;
         uint256 totalLiquidity;
         int256  cumulativePnlOnEngine;
-    }
-
-    struct VarOnExecuteRemoveLiquidity {
-        uint256 requestId;
-        uint256 lTokenId;
-        uint256 liquidity;
-        uint256 totalLiquidity;
-        int256  cumulativePnlOnEngine;
-        uint256 bAmount;
+        uint256 bAmountToRemove;
     }
 
     struct VarOnExecuteRemoveMargin {
@@ -72,7 +64,7 @@ interface IGateway {
         uint256 pTokenId;
         uint256 requiredMargin;
         int256  cumulativePnlOnEngine;
-        uint256 bAmount;
+        uint256 bAmountToRemove;
     }
 
     struct VarOnExecuteLiquidate {

@@ -4,17 +4,23 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import '@openzeppelin/contracts/token/ERC721/ERC721.sol';
 
+/**
+ * @title DToken Contract
+ * @dev An ERC721 token contract designed to represent both Liquidity Providers (Lp) and Traders.
+ *      This contract allows for the creation and management of unique tokens representing ownership or
+ *      participation in various activities within the ecosystem.
+ */
 contract DToken is ERC721 {
 
     error ChainIdOverflow();
     error OnlyGateway();
 
-    // We encode the dTokenId as follows to ensure every dTokenId
-    // on all chains in every DToken contract is unique
-    // 1. The highest 8 bits: Unique identifier to differentiate between different DToken contracts deployed on the same chain
-    // 1. The next 88 bits: Reserved for the chainid, which is used to distinguish DToken contracts deployed on different chains
-    // 3. The lowest 160 bits: Used to distinguish the individual dTokens minted within a specific contract
-    // The highest 96 bits will be fixed at deployment, and stored in BASE_TOKENID
+    // Encoding of dTokenId
+    // To ensure uniqueness across all DToken contracts on different chains, we encode the dTokenId as follows:
+    // 1. The highest 8 bits: A unique identifier distinguishing between different DToken contracts deployed on the same chain.
+    // 2. The next 88 bits: Reserved for the chainId, differentiating DToken contracts deployed on various chains.
+    // 3. The lowest 160 bits: Used to distinguish individual dTokens minted within a specific contract.
+    // The highest 96 bits remain fixed at deployment and are stored in BASE_TOKENID.
     uint256 public immutable BASE_TOKENID;
 
     // Only gateway can mint/burn tokens

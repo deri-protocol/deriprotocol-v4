@@ -26,6 +26,7 @@ contract GatewayImplementation is GatewayStorage {
     error BTokenNoSwapper();
     error BTokenNoOracle();
     error InvalidBToken();
+    error InvalidBAmount();
     error InvalidBPrice();
     error InvalidCustodian();
     error InvalidLTokenId();
@@ -123,22 +124,22 @@ contract GatewayImplementation is GatewayStorage {
         int256  lpPnl
     );
 
-    uint8 constant S_CUMULATIVEPNLONGATEWAY   = 1;
-    uint8 constant S_LIQUIDITYTIME              = 2;
-    uint8 constant S_TOTALLIQUIDITY             = 3;
-    uint8 constant S_CUMULATIVETIMEPERLIQUIDITY = 4;
+    uint8 constant S_CUMULATIVEPNLONGATEWAY     = 1; // Cumulative pnl on Gateway
+    uint8 constant S_LIQUIDITYTIME              = 2; // Last timestamp when liquidity updated
+    uint8 constant S_TOTALLIQUIDITY             = 3; // Total liquidity on d-chain
+    uint8 constant S_CUMULATIVETIMEPERLIQUIDITY = 4; // Cumulavie time per liquidity
 
-    uint8 constant B_VAULT             = 1;
-    uint8 constant B_ORACLEID          = 2;
-    uint8 constant B_COLLECTERALFACTOR = 3;
+    uint8 constant B_VAULT             = 1; // BToken vault address
+    uint8 constant B_ORACLEID          = 2; // BToken oracle id
+    uint8 constant B_COLLECTERALFACTOR = 3; // BToken collateral factor
 
-    uint8 constant D_REQUESTID                      = 1;
-    uint8 constant D_BTOKEN                         = 2;
-    uint8 constant D_B0AMOUNT                       = 3;
-    uint8 constant D_LASTCUMULATIVEPNLONENGINE      = 4;
-    uint8 constant D_LIQUIDITY                      = 5;
-    uint8 constant D_CUMULATIVETIME                 = 6;
-    uint8 constant D_LASTCUMULATIVETIMEPERLIQUIDITY = 7;
+    uint8 constant D_REQUESTID                      = 1; // Lp/Trader request id
+    uint8 constant D_BTOKEN                         = 2; // Lp/Trader bToken
+    uint8 constant D_B0AMOUNT                       = 3; // Lp/Trader b0Amount
+    uint8 constant D_LASTCUMULATIVEPNLONENGINE      = 4; // Lp/Trader last cumulative pnl on engine
+    uint8 constant D_LIQUIDITY                      = 5; // Lp liquidity
+    uint8 constant D_CUMULATIVETIME                 = 6; // Lp cumulative time
+    uint8 constant D_LASTCUMULATIVETIMEPERLIQUIDITY = 7; // Lp last cumulative time per liquidity
 
     uint256 constant UONE = 1e18;
     int256  constant ONE = 1e18;
@@ -148,9 +149,9 @@ contract GatewayImplementation is GatewayStorage {
     IDToken  internal immutable pToken;
     IOracle  internal immutable oracle;
     ISwapper internal immutable swapper;
-    IVault   internal immutable vault0;
-    IIOU     internal immutable iou;
-    address  internal immutable tokenB0;
+    IVault   internal immutable vault0;  // Vault for holding reserved B0, used for payments on regular bases
+    IIOU     internal immutable iou;     // IOU ERC20, issued to traders when B0 insufficent
+    address  internal immutable tokenB0; // B0, settlement base token, e.g. USDC
     address  internal immutable dChainEventSigner;
     uint8    internal immutable decimalsB0;
     uint256  internal immutable b0ReserveRatio;
@@ -237,6 +238,7 @@ contract GatewayImplementation is GatewayStorage {
         s.lastCumulativePnlOnEngine = _dTokenStates[pTokenId].getInt(D_LASTCUMULATIVEPNLONENGINE);
     }
 
+    // @notice Calculate Lp's cumulative time, used in liquidity mining reward distributions
     function getCumulativeTime(uint256 lTokenId)
     public view returns (uint256 cumulativeTimePerLiquidity, uint256 cumulativeTime)
     {
@@ -263,10 +265,6 @@ contract GatewayImplementation is GatewayStorage {
     // Setters
     //================================================================================
 
-    function approveVault0() external _onlyAdmin_ {
-        tokenB0.approveMax(address(vault0));
-    }
-
     function addBToken(
         address bToken,
         address vault,
@@ -283,10 +281,16 @@ contract GatewayImplementation is GatewayStorage {
             if (!swapper.isSupportedToken(bToken)) {
                 revert BTokenNoSwapper();
             }
+            // Approve for swapper and vault
             bToken.approveMax(address(swapper));
             bToken.approveMax(vault);
+            if (bToken == tokenB0) {
+                // The reserved portion for B0 will be deposited to vault0
+                bToken.approveMax(address(vault0));
+            }
         }
-        if (oracle.getValue(oracleId) == 0) {
+        // Check bToken oracle except B0
+        if (bToken != tokenB0 && oracle.getValue(oracleId) == 0) {
             revert BTokenNoOracle();
         }
         _bTokenStates[bToken].set(B_VAULT, vault);
@@ -297,6 +301,7 @@ contract GatewayImplementation is GatewayStorage {
     }
 
     function delBToken(address bToken) external _onlyAdmin_ {
+        // bToken can only be deleted when there is no deposits
         if (IVault(_bTokenStates[bToken].getAddress(B_VAULT)).stTotalAmount() != 0) {
             revert CannotDelBToken();
         }
@@ -308,6 +313,7 @@ contract GatewayImplementation is GatewayStorage {
         emit DelBToken(bToken);
     }
 
+    // @dev This function can be used to change bToken collateral factor
     function setBTokenParameter(address bToken, uint8 idx, bytes32 value) external _onlyAdmin_ {
         _bTokenStates[bToken].set(idx, value);
         emit UpdateBToken(bToken);
@@ -317,6 +323,7 @@ contract GatewayImplementation is GatewayStorage {
     // Interactions
     //================================================================================
 
+    // @notice Redeem B0 for burning IOU
     function redeemIOU(uint256 b0Amount) external {
         if (b0Amount > 0) {
             uint256 b0Redeemed = vault0.redeem(uint256(0), b0Amount);
@@ -327,6 +334,12 @@ contract GatewayImplementation is GatewayStorage {
         }
     }
 
+    /**
+     * @notice Request to add liquidity with specified base token.
+     * @param lTokenId The unique identifier of the LToken.
+     * @param bToken The address of the base token to add as liquidity.
+     * @param bAmount The amount of base tokens to add as liquidity.
+     */
     function requestAddLiquidity(uint256 lTokenId, address bToken, uint256 bAmount) external payable {
         if (lTokenId == 0) {
             lTokenId = lToken.mint(msg.sender);
@@ -339,9 +352,14 @@ contract GatewayImplementation is GatewayStorage {
 
         if (bToken == tokenETH) {
             bAmount = msg.value;
-        } else {
+        }
+        if (bAmount == 0) {
+            revert InvalidBAmount();
+        }
+        if (bToken != tokenETH) {
             bToken.transferIn(data.account, bAmount);
         }
+
         _deposit(data, bAmount);
         _getExParams(data);
         uint256 newLiquidity = _getDTokenLiquidity(data);
@@ -359,8 +377,18 @@ contract GatewayImplementation is GatewayStorage {
         );
     }
 
+    /**
+     * @notice Request to remove liquidity with specified base token.
+     * @param lTokenId The unique identifier of the LToken.
+     * @param bToken The address of the base token to remove as liquidity.
+     * @param bAmount The amount of base tokens to remove as liquidity.
+     */
     function requestRemoveLiquidity(uint256 lTokenId, address bToken, uint256 bAmount) external {
         _checkLTokenIdOwner(lTokenId, msg.sender);
+
+        if (bAmount == 0) {
+            revert InvalidBAmount();
+        }
 
         Data memory data = _getData(msg.sender, lTokenId, bToken);
         _getExParams(data);
@@ -381,6 +409,13 @@ contract GatewayImplementation is GatewayStorage {
         );
     }
 
+    /**
+     * @notice Request to add margin with specified base token.
+     * @param pTokenId The unique identifier of the PToken.
+     * @param bToken The address of the base token to add as margin.
+     * @param bAmount The amount of base tokens to add as margin.
+     * @return The unique identifier pTokenId.
+     */
     function requestAddMargin(uint256 pTokenId, address bToken, uint256 bAmount) public payable returns (uint256) {
         if (pTokenId == 0) {
             pTokenId = pToken.mint(msg.sender);
@@ -393,9 +428,14 @@ contract GatewayImplementation is GatewayStorage {
 
         if (bToken == tokenETH) {
             bAmount = msg.value;
-        } else {
+        }
+        if (bAmount == 0) {
+            revert InvalidBAmount();
+        }
+        if (bToken != tokenETH) {
             bToken.transferIn(data.account, bAmount);
         }
+
         _deposit(data, bAmount);
 
         _saveData(data);
@@ -411,8 +451,18 @@ contract GatewayImplementation is GatewayStorage {
         return pTokenId;
     }
 
+    /**
+     * @notice Request to remove margin with specified base token.
+     * @param pTokenId The unique identifier of the PToken.
+     * @param bToken The address of the base token to remove as margin.
+     * @param bAmount The amount of base tokens to remove as margin.
+     */
     function requestRemoveMargin(uint256 pTokenId, address bToken, uint256 bAmount) external {
         _checkPTokenIdOwner(pTokenId, msg.sender);
+
+        if (bAmount == 0) {
+            revert InvalidBAmount();
+        }
 
         Data memory data = _getData(msg.sender, pTokenId, bToken);
         _getExParams(data);
@@ -433,6 +483,12 @@ contract GatewayImplementation is GatewayStorage {
         );
     }
 
+    /**
+     * @notice Request to initiate a trade using a specified PToken, symbol identifier, and trade parameters.
+     * @param pTokenId The unique identifier of the PToken.
+     * @param symbolId The identifier of the trading symbol.
+     * @param tradeParams An array of trade parameters for the trade execution.
+     */
     function requestTrade(uint256 pTokenId, bytes32 symbolId, int256[] calldata tradeParams) public {
         _checkPTokenIdOwner(pTokenId, msg.sender);
 
@@ -452,6 +508,10 @@ contract GatewayImplementation is GatewayStorage {
         );
     }
 
+    /**
+     * @notice Request to liquidate a specified PToken.
+     * @param pTokenId The unique identifier of the PToken.
+     */
     function requestLiquidate(uint256 pTokenId) external {
         Data memory data = _getData(pToken.ownerOf(pTokenId), pTokenId, _dTokenStates[pTokenId].getAddress(D_BTOKEN));
         _getExParams(data);
@@ -467,6 +527,14 @@ contract GatewayImplementation is GatewayStorage {
         );
     }
 
+    /**
+     * @notice Request to add margin and initiate a trade in a single transaction.
+     * @param pTokenId The unique identifier of the PToken.
+     * @param bToken The address of the base token to add as margin.
+     * @param bAmount The amount of base tokens to add as margin.
+     * @param symbolId The identifier of the trading symbol for the trade.
+     * @param tradeParams An array of trade parameters for the trade execution.
+     */
     function requestAddMarginAndTrade(
         uint256 pTokenId,
         address bToken,
@@ -478,6 +546,14 @@ contract GatewayImplementation is GatewayStorage {
         requestTrade(pTokenId, symbolId, tradeParams);
     }
 
+    /**
+     * @notice Request to initiate a trade and simultaneously remove margin from a specified PToken.
+     * @param pTokenId The unique identifier of the PToken.
+     * @param bToken The address of the base token to remove as margin.
+     * @param bAmount The amount of base tokens to remove as margin.
+     * @param symbolId The identifier of the trading symbol for the trade.
+     * @param tradeParams An array of trade parameters for the trade execution.
+     */
     function requestTradeAndRemoveMargin(
         uint256 pTokenId,
         address bToken,
@@ -486,6 +562,10 @@ contract GatewayImplementation is GatewayStorage {
         int256[] calldata tradeParams
     ) external {
         _checkPTokenIdOwner(pTokenId, msg.sender);
+
+        if (bAmount == 0) {
+            revert InvalidBAmount();
+        }
 
         Data memory data = _getData(msg.sender, pTokenId, bToken);
         _getExParams(data);
@@ -508,68 +588,71 @@ contract GatewayImplementation is GatewayStorage {
         );
     }
 
-    function finishAddLiquidity(bytes memory eventData, bytes memory signature) external {
+    /**
+     * @notice Finalize the liquidity update based on event emitted on d-chain.
+     * @param eventData The encoded event data containing information about the liquidity update, emitted on d-chain.
+     * @param signature The signature used to verify the event data.
+     */
+    function finishUpdateLiquidity(bytes memory eventData, bytes memory signature) external _reentryLock_ {
         _verifyEventData(eventData, signature);
-        IGateway.VarOnExecuteAddLiquidity memory v = abi.decode(eventData, (IGateway.VarOnExecuteAddLiquidity));
+        IGateway.VarOnExecuteUpdateLiquidity memory v = abi.decode(eventData, (IGateway.VarOnExecuteUpdateLiquidity));
         _checkRequestId(v.lTokenId, v.requestId);
 
         _updateLiquidity(v.lTokenId, v.liquidity, v.totalLiquidity);
 
-        int256 b0Amount = _dTokenStates[v.lTokenId].getInt(D_B0AMOUNT);
-        int256 lastCumulativePnlOnEngine = _dTokenStates[v.lTokenId].getInt(D_LASTCUMULATIVEPNLONENGINE);
-        int256 diff = v.cumulativePnlOnEngine.minusUnchecked(lastCumulativePnlOnEngine);
-        b0Amount += diff.rescaleDown(18, decimalsB0);
-
-        _dTokenStates[v.lTokenId].set(D_B0AMOUNT, b0Amount);
-        _dTokenStates[v.lTokenId].set(D_LASTCUMULATIVEPNLONENGINE, v.cumulativePnlOnEngine);
-
-        emit FinishAddLiquidity(
-            v.requestId,
-            v.lTokenId,
-            v.liquidity,
-            v.totalLiquidity
-        );
-    }
-
-    function finishRemoveLiquidity(bytes memory eventData, bytes memory signature) external _reentryLock_ {
-        _verifyEventData(eventData, signature);
-        IGateway.VarOnExecuteRemoveLiquidity memory v = abi.decode(eventData, (IGateway.VarOnExecuteRemoveLiquidity));
-        _checkRequestId(v.lTokenId, v.requestId);
-
-        _updateLiquidity(v.lTokenId, v.liquidity, v.totalLiquidity);
-
+        // Cumulate unsettled PNL to b0Amount
         Data memory data = _getData(lToken.ownerOf(v.lTokenId), v.lTokenId, _dTokenStates[v.lTokenId].getAddress(D_BTOKEN));
         int256 diff = v.cumulativePnlOnEngine.minusUnchecked(data.lastCumulativePnlOnEngine);
         data.b0Amount += diff.rescaleDown(18, decimalsB0);
         data.lastCumulativePnlOnEngine = v.cumulativePnlOnEngine;
 
-        _getExParams(data);
-        uint256 bAmount = v.bAmount == 0 ? 0 : _transferOut(data, v.liquidity == 0 ? type(uint256).max : v.bAmount, false);
+        uint256 bAmountRemoved;
+        if (v.bAmountToRemove != 0) {
+            _getExParams(data);
+            bAmountRemoved = _transferOut(data, v.liquidity == 0 ? type(uint256).max : v.bAmountToRemove, false);
+        }
 
         _saveData(data);
 
-        emit FinishRemoveLiquidity(
-            v.requestId,
-            v.lTokenId,
-            v.liquidity,
-            v.totalLiquidity,
-            data.bToken,
-            bAmount
-        );
+        if (v.bAmountToRemove == 0) {
+            // If bAmountToRemove == 0, it is a AddLiqudiity finalization
+            emit FinishAddLiquidity(
+                v.requestId,
+                v.lTokenId,
+                v.liquidity,
+                v.totalLiquidity
+            );
+        } else {
+            // If bAmountToRemove != 0, it is a RemoveLiquidity finalization
+            emit FinishRemoveLiquidity(
+                v.requestId,
+                v.lTokenId,
+                v.liquidity,
+                v.totalLiquidity,
+                data.bToken,
+                bAmountRemoved
+            );
+        }
     }
 
+    /**
+     * @notice Finalize the remove of margin based on event emitted on d-chain.
+     * @param eventData The encoded event data containing information about the margin remove, emitted on d-chain.
+     * @param signature The signature used to verify the event data.
+     */
     function finishRemoveMargin(bytes memory eventData, bytes memory signature) external _reentryLock_ {
         _verifyEventData(eventData, signature);
         IGateway.VarOnExecuteRemoveMargin memory v = abi.decode(eventData, (IGateway.VarOnExecuteRemoveMargin));
         _checkRequestId(v.pTokenId, v.requestId);
 
+        // Cumulate unsettled PNL to b0Amount
         Data memory data = _getData(pToken.ownerOf(v.pTokenId), v.pTokenId, _dTokenStates[v.pTokenId].getAddress(D_BTOKEN));
         int256 diff = v.cumulativePnlOnEngine.minusUnchecked(data.lastCumulativePnlOnEngine);
         data.b0Amount += diff.rescaleDown(18, decimalsB0);
         data.lastCumulativePnlOnEngine = v.cumulativePnlOnEngine;
 
         _getExParams(data);
-        uint256 bAmount = _transferOut(data, v.bAmount, true);
+        uint256 bAmount = _transferOut(data, v.bAmountToRemove, true);
 
         if (_getDTokenLiquidity(data) < v.requiredMargin) {
             revert InsufficientMargin();
@@ -585,10 +668,16 @@ contract GatewayImplementation is GatewayStorage {
         );
     }
 
+    /**
+     * @notice Finalize the liquidation based on event emitted on d-chain.
+     * @param eventData The encoded event data containing information about the liquidation, emitted on d-chain.
+     * @param signature The signature used to verify the event data.
+     */
     function finishLiquidate(bytes memory eventData, bytes memory signature) external _reentryLock_ {
         _verifyEventData(eventData, signature);
         IGateway.VarOnExecuteLiquidate memory v = abi.decode(eventData, (IGateway.VarOnExecuteLiquidate));
 
+        // Cumulate unsettled PNL to b0Amount
         Data memory data = _getData(pToken.ownerOf(v.pTokenId), v.pTokenId, _dTokenStates[v.pTokenId].getAddress(D_BTOKEN));
         int256 diff = v.cumulativePnlOnEngine.minusUnchecked(data.lastCumulativePnlOnEngine);
         data.b0Amount += diff.rescaleDown(18, decimalsB0);
@@ -596,6 +685,7 @@ contract GatewayImplementation is GatewayStorage {
 
         uint256 b0AmountIn;
 
+        // Redeem all bToken from vault and swap into B0
         {
             uint256 bAmount = IVault(data.vault).redeem(data.dTokenId, type(uint256).max);
             if (data.bToken == tokenB0) {
@@ -609,9 +699,10 @@ contract GatewayImplementation is GatewayStorage {
             }
         }
 
-        int256 lpPnl = b0AmountIn.utoi() + data.b0Amount;
+        int256 lpPnl = b0AmountIn.utoi() + data.b0Amount; // All Lp's PNL by liquidating this trader
         int256 reward;
 
+        // Calculate liquidator's reward
         {
             if (lpPnl <= minLiquidationReward) {
                 reward = minLiquidationReward;
@@ -640,6 +731,8 @@ contract GatewayImplementation is GatewayStorage {
             vault0.deposit(uint256(0), b0AmountIn);
         }
 
+        // Cumulate lpPnl into cumulativePnlOnGateway,
+        // which will be distributed to all LPs on all i-chains with next request process
         data.cumulativePnlOnGateway = data.cumulativePnlOnGateway.addUnchecked(lpPnl.rescale(decimalsB0, 18));
         data.b0Amount = 0;
         _saveData(data);
@@ -656,19 +749,20 @@ contract GatewayImplementation is GatewayStorage {
     // Internals
     //================================================================================
 
+    // Temporary struct holding intermediate values passed around functions
     struct Data {
-        address account;
-        uint256 dTokenId;
-        address bToken;
+        address account;                   // Lp/Trader account address
+        uint256 dTokenId;                  // Lp/Trader dTokenId
+        address bToken;                    // Lp/Trader bToken address
 
-        int256  cumulativePnlOnGateway;
-        address vault;
+        int256  cumulativePnlOnGateway;    // cumulative pnl on Gateway
+        address vault;                     // Lp/Trader bToken's vault address
 
-        int256  b0Amount;
-        int256  lastCumulativePnlOnEngine;
+        int256  b0Amount;                  // Lp/Trader b0Amount
+        int256  lastCumulativePnlOnEngine; // Lp/Trader last cumulative pnl on engine
 
-        uint256 collateralFactor;
-        uint256 bPrice;
+        uint256 collateralFactor;          // bToken collateral factor
+        uint256 bPrice;                    // bToken price
     }
 
     function _getData(address account, uint256 dTokenId, address bToken) internal view returns (Data memory data) {
@@ -730,7 +824,7 @@ contract GatewayImplementation is GatewayStorage {
         }
     }
 
-    // bPrice * bAmount / UONE = b0Amount, b0Amount in decimalsB0
+    // @dev bPrice * bAmount / UONE = b0Amount, b0Amount in decimalsB0
     function _getBPrice(address bToken) internal view returns (uint256 bPrice) {
         if (bToken == tokenB0) {
             bPrice = UONE;
@@ -748,7 +842,7 @@ contract GatewayImplementation is GatewayStorage {
         data.bPrice = _getBPrice(data.bToken);
     }
 
-    // liquidity is in decimals18
+    // @notice Calculate the liquidity (in 18 decimals) associated with current dTokenId
     function _getDTokenLiquidity(Data memory data) internal view returns (uint256 liquidity) {
         uint256 liquidityInB0 = (
             IVault(data.vault).getBalance(data.dTokenId) * data.bPrice / UONE * data.collateralFactor / UONE
@@ -756,6 +850,7 @@ contract GatewayImplementation is GatewayStorage {
         return liquidityInB0.rescale(decimalsB0, 18);
     }
 
+    // @notice Calculate the liquidity (in 18 decimals) associated with current dTokenId if `bAmount` in bToken is removed
     function _getDTokenLiquidityWithRemove(Data memory data, uint256 bAmount) internal view returns (uint256 liquidity) {
         if (bAmount < type(uint256).max / data.bPrice) { // make sure bAmount * bPrice won't overflow
             uint256 bAmountInVault = IVault(data.vault).getBalance(data.dTokenId);
@@ -781,6 +876,7 @@ contract GatewayImplementation is GatewayStorage {
         }
     }
 
+    // @notice Deposit bToken with `bAmount`
     function _deposit(Data memory data, uint256 bAmount) internal {
         if (data.bToken == tokenB0) {
             uint256 reserved = bAmount * b0ReserveRatio / UONE;
@@ -795,24 +891,35 @@ contract GatewayImplementation is GatewayStorage {
         }
     }
 
+    /**
+     * @notice Transfer a specified amount of bToken, handling various cases.
+     * @param data A Data struct containing information about the interaction.
+     * @param bAmountOut The intended amount of tokens to transfer out.
+     * @param isTd A flag indicating whether the transfer is for a trader (true) or not (false).
+     * @return bAmount The amount of tokens actually transferred.
+     */
     function _transferOut(Data memory data, uint256 bAmountOut, bool isTd) internal returns (uint256 bAmount) {
         bAmount = bAmountOut;
 
+        // Handle redemption of additional tokens to cover a negative B0 amount.
         if (bAmount < type(uint256).max / UONE && data.b0Amount < 0) {
-            // more bAmount need to be redeemed to cover a negative b0Amount
             if (data.bToken == tokenB0) {
+                // Redeem B0 tokens to cover the negative B0 amount.
                 bAmount += (-data.b0Amount).itou();
             } else {
-                bAmount += (-data.b0Amount).itou() * UONE / data.bPrice * 105 / 100; // excessive to cover any possible swap slippage
+                // Swap tokens to B0 to cover the negative B0 amount, with a slight excess to account for possible slippage.
+                bAmount += (-data.b0Amount).itou() * UONE / data.bPrice * 105 / 100;
             }
         }
 
-        bAmount = IVault(data.vault).redeem(data.dTokenId, bAmount); // bAmount now is the actually bToken redeemed
-        uint256 b0AmountIn;  // for b0 goes to reserves
-        uint256 b0AmountOut; // for b0 goes to user, (b0AmountIn + b0AmountOut) is the tokenB0 available currently in Gateway
-        uint256 iouAmount; // iou amount goes to trader
+        // Redeem tokens from the vault using IVault interface.
+        bAmount = IVault(data.vault).redeem(data.dTokenId, bAmount); // bAmount now represents the actual redeemed bToken.
 
-        // fill b0Amount hole
+        uint256 b0AmountIn;  // Amount of B0 tokens going to reserves.
+        uint256 b0AmountOut; // Amount of B0 tokens going to the user.
+        uint256 iouAmount;   // Amount of IOU tokens going to the trader.
+
+        // Handle filling the negative B0 balance, by swapping bToken into B0, if necessary.
         if (bAmount > 0 && data.b0Amount < 0) {
             uint256 owe = (-data.b0Amount).itou();
             uint256 tmpIn;
@@ -837,7 +944,7 @@ contract GatewayImplementation is GatewayStorage {
             data.b0Amount += tmpIn.utoi();
         }
 
-        // deal excessive
+        // Handle excessive tokens (more than bAmountOut).
         if (bAmount > bAmountOut) {
             uint256 bExcessive = bAmount - bAmountOut;
             uint256 tmpIn;
@@ -857,7 +964,7 @@ contract GatewayImplementation is GatewayStorage {
             data.b0Amount += tmpIn.utoi();
         }
 
-        // deal with reserved portion when withdraw all, or operating token is tokenB0
+        // Handle reserved portion when withdrawing all or operating token is tokenB0
         if (data.b0Amount > 0) {
             uint256 amount;
             if (bAmountOut >= type(uint256).max / UONE) { // withdraw all
@@ -868,8 +975,9 @@ contract GatewayImplementation is GatewayStorage {
             if (amount > 0) {
                 uint256 tmpOut;
                 if (amount > b0AmountIn) {
+                    // Redeem B0 tokens from vault0
                     uint256 b0Redeemed = vault0.redeem(uint256(0), amount - b0AmountIn);
-                    if (isTd && b0Redeemed < amount - b0AmountIn) { // b0 insufficent
+                    if (isTd && b0Redeemed < amount - b0AmountIn) { // b0 insufficent for trader
                         iouAmount = amount - b0AmountIn - b0Redeemed;
                     }
                     tmpOut = b0AmountIn + b0Redeemed;
@@ -883,19 +991,22 @@ contract GatewayImplementation is GatewayStorage {
             }
         }
 
+        // Deposit B0 tokens into the vault0, if any
         if (b0AmountIn > 0) {
             vault0.deposit(uint256(0), b0AmountIn);
         }
 
-        // transfer b0, or swap b0 to current operating token
+        // Transfer B0 tokens or swap them to the current operating token
         if (b0AmountOut > 0) {
             if (isTd) {
+                // No swap from B0 to BX for trader
                 if (data.bToken == tokenB0) {
                     bAmount += b0AmountOut;
                 } else {
                     tokenB0.transferOut(data.account, b0AmountOut);
                 }
             } else {
+                // Swap B0 into BX for Lp
                 if (data.bToken == tokenB0) {
                     bAmount += b0AmountOut;
                 } else if (data.bToken == tokenETH) {
@@ -908,15 +1019,23 @@ contract GatewayImplementation is GatewayStorage {
             }
         }
 
+        // Transfer the remaining bAmount to the user's account.
         if (bAmount > 0) {
             data.bToken.transferOut(data.account, bAmount);
         }
 
+        // Mint IOU tokens for the trader, if any.
         if (iouAmount > 0) {
             iou.mint(data.account, iouAmount);
         }
     }
 
+    /**
+     * @dev Update liquidity-related state variables for a specific `lTokenId`.
+     * @param lTokenId The ID of the corresponding lToken.
+     * @param newLiquidity The new liquidity amount for the lToken.
+     * @param newTotalLiquidity The new total liquidity in the engine.
+     */
     function _updateLiquidity(uint256 lTokenId, uint256 newLiquidity, uint256 newTotalLiquidity) internal {
         (uint256 cumulativeTimePerLiquidity, uint256 cumulativeTime) = getCumulativeTime(lTokenId);
         _gatewayStates.set(S_LIQUIDITYTIME, block.timestamp);

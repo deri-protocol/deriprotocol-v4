@@ -59,6 +59,14 @@ library Bytes32Map {
         delete store[idx];
     }
 
+    /**
+     * @notice Convert a string to a bytes32 value.
+     * @dev This function takes an input string 'value' and converts it into a bytes32 value.
+     *      It enforces a length constraint of 31 characters or less to ensure it fits within a bytes32.
+     *      The function uses inline assembly to efficiently copy the string data into the bytes32.
+     * @param value The input string to be converted.
+     * @return The bytes32 representation of the input string.
+     */
     function stringToBytes32(string memory value) internal pure returns (bytes32) {
         if (bytes(value).length > 31) {
             revert StringExceeds31Bytes(value);
@@ -70,6 +78,13 @@ library Bytes32Map {
         return res;
     }
 
+    /**
+     * @notice Convert a bytes32 value to a string.
+     * @dev This function takes an input bytes32 'value' and converts it into a string.
+     *      It dynamically determines the length of the string based on non-null characters in 'value'.
+     * @param value The input bytes32 value to be converted.
+     * @return The string representation of the input bytes32.
+     */
     function bytes32ToString(bytes32 value) internal pure returns (string memory) {
         bytes memory bytesArray = new bytes(32);
         for (uint256 i = 0; i < 32; i++) {

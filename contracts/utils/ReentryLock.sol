@@ -8,6 +8,7 @@ abstract contract ReentryLock {
 
     bool internal _mutex;
 
+    // @notice Lock for preventing reentrancy attacks
     modifier _reentryLock_() {
         if (_mutex) {
             revert Reentry();

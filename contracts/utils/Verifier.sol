@@ -24,6 +24,7 @@ abstract contract Verifier is Admin {
         emit DelVerifier(verifier);
     }
 
+    // @notice Verify message with combined signature
     function _verifyMessage(bytes32 message, bytes memory signature) internal view {
         bytes32 hash = ECDSA.toEthSignedMessageHash(message);
         address signer = ECDSA.recover(hash, signature);
@@ -32,6 +33,7 @@ abstract contract Verifier is Admin {
         }
     }
 
+    // @notice Verify message with splitted signature in (v, r, s)
     function _verifyMessage(bytes32 message, uint8 v, bytes32 r, bytes32 s) internal view {
         bytes32 hash = ECDSA.toEthSignedMessageHash(message);
         address signer = ECDSA.recover(hash, v, r, s);

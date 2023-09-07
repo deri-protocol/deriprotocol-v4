@@ -24,21 +24,13 @@ contract PoolImplementation is PoolStorage {
     error NoMaintenanceMarginRequired();
     error CanNotLiquidate();
 
-    event ExecuteAddLiquidity(
-        uint256 requestId,
-        uint256 lTokenId,
-        uint256 liquidity,
-        uint256 totalLiquidity,
-        int256  cumulativePnlOnEngine
-    );
-
-    event ExecuteRemoveLiquidity(
+    event ExecuteUpdateLiquidity(
         uint256 requestId,
         uint256 lTokenId,
         uint256 liquidity,
         uint256 totalLiquidity,
         int256  cumulativePnlOnEngine,
-        uint256 bAmount
+        uint256 bAmountToRemove
     );
 
     event ExecuteRemoveMargin(
@@ -55,18 +47,18 @@ contract PoolImplementation is PoolStorage {
         int256  cumulativePnlOnEngine
     );
 
-    uint8 constant S_TOTALLIQUIDITY            = 1;
-    uint8 constant S_LPSPNL                    = 2;
-    uint8 constant S_CUMULATIVEPNLPERLIQUIDITY = 3;
-    uint8 constant S_PROTOCOLFEE               = 4;
+    uint8 constant S_TOTALLIQUIDITY            = 1; // total liquidity
+    uint8 constant S_LPSPNL                    = 2; // total lp's pnl
+    uint8 constant S_CUMULATIVEPNLPERLIQUIDITY = 3; // cumulative pnl per liquidity
+    uint8 constant S_PROTOCOLFEE               = 4; // total protocol fee collected
 
-    uint8 constant I_LASTCUMULATIVEPNLONGATEWAY = 1;
+    uint8 constant I_LASTCUMULATIVEPNLONGATEWAY = 1; // last cumulative pnl on specific i-chain gateway
 
-    uint8 constant D_REQUESTID                 = 1;
-    uint8 constant D_CUMULATIVEPNL             = 2;
-    uint8 constant D_LIQUIDITY                 = 3;
-    uint8 constant D_CUMULATIVEPNLPERLIQUIDITY = 4;
-    uint8 constant D_LIQUIDATED                = 5;
+    uint8 constant D_REQUESTID                 = 1; // Lp/Trader request id
+    uint8 constant D_CUMULATIVEPNL             = 2; // Lp/Trader cumulative pnl
+    uint8 constant D_LIQUIDITY                 = 3; // Lp liquidity
+    uint8 constant D_CUMULATIVEPNLPERLIQUIDITY = 4; // Lp cumulative pnl per liquidity
+    uint8 constant D_LIQUIDATED                = 5; // Is trader liquidated
 
     int256 constant ONE = 1e18;
 
@@ -136,6 +128,7 @@ contract PoolImplementation is PoolStorage {
         IPool.VarOnUpdateLiquidity memory v = abi.decode(eventData, (IPool.VarOnUpdateLiquidity));
         _updateRequestId(v.lTokenId, v.requestId);
         uint256 curLiquidity = _dStates[v.lTokenId].getInt(D_LIQUIDITY).itou();
+        // Depends on liquidity change, call addLiquidity or removeLiquidity logic
         if (v.liquidity > curLiquidity) {
             _addLiquidity(v);
         } else if (v.liquidity < curLiquidity) {
@@ -209,12 +202,13 @@ contract PoolImplementation is PoolStorage {
 
         _saveData(data, v.lTokenId, true);
 
-        emit ExecuteAddLiquidity(
+        emit ExecuteUpdateLiquidity(
             v.requestId,
             v.lTokenId,
             data.lpLiquidity.itou(),
             data.totalLiquidity.itou(),
-            data.cumulativePnl
+            data.cumulativePnl,
+            v.bAmountToRemove
         );
     }
 
@@ -244,13 +238,13 @@ contract PoolImplementation is PoolStorage {
 
         _saveData(data, v.lTokenId, true);
 
-        emit ExecuteRemoveLiquidity(
+        emit ExecuteUpdateLiquidity(
             v.requestId,
             v.lTokenId,
             data.lpLiquidity.itou(),
             data.totalLiquidity.itou(),
             data.cumulativePnl,
-            v.removeBAmount
+            v.bAmountToRemove
         );
     }
 

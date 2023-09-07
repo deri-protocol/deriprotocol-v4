@@ -56,15 +56,17 @@ library SafeMath {
         return a <= b ? a : b;
     }
 
-    // rescale value uint256 from base 10**decimals1 to 10**decimals2
+    // @notice Rescale a uint256 value from a base of 10^decimals1 to 10^decimals2
     function rescale(uint256 value, uint256 decimals1, uint256 decimals2) internal pure returns (uint256) {
         return decimals1 == decimals2 ? value : value * 10**decimals2 / 10**decimals1;
     }
 
+    // @notice Rescale value with rounding down
     function rescaleDown(uint256 value, uint256 decimals1, uint256 decimals2) internal pure returns (uint256) {
         return rescale(value, decimals1, decimals2);
     }
 
+    // @notice Rescale value with rounding up
     function rescaleUp(uint256 value, uint256 decimals1, uint256 decimals2) internal pure returns (uint256) {
         uint256 rescaled = rescale(value, decimals1, decimals2);
         if (rescale(rescaled, decimals2, decimals1) != value) {
@@ -93,10 +95,12 @@ library SafeMath {
         return rescaled;
     }
 
+    // @notice Calculate a + b with overflow allowed
     function addUnchecked(int256 a, int256 b) internal pure returns (int256 c) {
         unchecked { c = a + b; }
     }
 
+    // @notice Calculate a - b with overflow allowed
     function minusUnchecked(int256 a, int256 b) internal pure returns (int256 c) {
         unchecked { c = a - b; }
     }

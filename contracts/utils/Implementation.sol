@@ -10,6 +10,7 @@ abstract contract Implementation is Admin {
 
     address public implementation;
 
+    // @notice Set a new implementation address for the contract
     function setImplementation(address newImplementation) external _onlyAdmin_ {
         implementation = newImplementation;
         emit NewImplementation(newImplementation);

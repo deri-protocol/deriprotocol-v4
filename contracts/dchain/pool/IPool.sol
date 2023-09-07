@@ -42,7 +42,7 @@ interface IPool {
         uint256 liquidity;
         int256  lastCumulativePnlOnEngine;
         int256  cumulativePnlOnGateway;
-        uint256 removeBAmount;
+        uint256 bAmountToRemove;
     }
 
     struct VarOnRemoveMargin {

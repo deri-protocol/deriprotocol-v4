@@ -8,10 +8,16 @@ library EverlastingOptionPricing {
 
     int256 private constant ONE = 1e18;
 
-    // @param S Spot price
-    // @param K Strike price
-    // @param sigma Volatility
-    // @param T Funding period in years
+    /**
+     * @notice Calculate the time value and delta of an option based on the Black-Scholes model.
+     * @param S The spot price of the underlying asset.
+     * @param K The strike price of the option.
+     * @param sigma The volatility of the underlying asset.
+     * @param T The funding period in years.
+     * @return timeValue The time value of the option.
+     * @return delta The delta, which measures the sensitivity of the option's price to changes in the spot price.
+     * @return u The 'u' parameter used in the calculations.
+     */
     function getEverlastingTimeValueAndDelta(int256 S, int256 K, int256 sigma, int256 T)
     internal pure returns (int256 timeValue, int256 delta, int256 u)
     {
@@ -31,9 +37,15 @@ library EverlastingOptionPricing {
         }
     }
 
-    // @param S Spot price
-    // @param K Strike price
-    // @param sigma Volatility
+    /**
+     * @notice Calculate the Vega, which measures the sensitivity of an option's price to changes in volatility.
+     * @param S The spot price of the underlying asset.
+     * @param K The strike price of the option.
+     * @param sigma The volatility of the underlying asset.
+     * @param timeValue The time value of the option.
+     * @param u The 'u' parameter used in the calculations.
+     * @return vega The Vega of the option.
+     */
     function getVega(int256 S, int256 K, int256 sigma, int256 timeValue, int256 u)
     internal pure returns (int256 vega)
     {

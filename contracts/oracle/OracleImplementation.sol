@@ -47,12 +47,14 @@ contract OracleImplementation is OracleStorage {
         s.chainlinkFeed = _states[oracleId].getAddress(S_CHAINLINKFEED);
     }
 
+    // @notice Get oracle value without any checking
     function getValue(bytes32 oracleId) public view returns (int256) {
         (, , int256 value) = _getValue(oracleId);
         return value;
     }
 
-    // When source is offchain, value must be updated in current block, otherwise revert
+    // @notice Get oracle value of current block
+    // @dev When source is offchain, value must be updated in current block, otherwise revert
     function getValueCurrentBlock(bytes32 oracleId) public view returns (int256) {
         (uint256 blockNumber, , int256 value) = _getValue(oracleId);
         if (blockNumber != block.number) {
@@ -65,6 +67,7 @@ contract OracleImplementation is OracleStorage {
     // Setters
     //================================================================================
 
+    // @notice Set new offchain oracle
     function setOffchainOracle(string memory symbol, uint256 delayAllowance, int256 value) external _onlyAdmin_ {
         bytes32 oracleId = getOracleId(symbol);
         _states[oracleId].set(S_SYMBOL, symbol);
@@ -74,6 +77,7 @@ contract OracleImplementation is OracleStorage {
         emit NewOracle(oracleId, SOURCE_OFFCHAIN);
     }
 
+    // @notice Set new Chainlink oracle
     function setChainlinkOracle(string memory symbol, address feed) external _onlyAdmin_ {
         bytes32 oracleId = getOracleId(symbol);
         _states[oracleId].set(S_SYMBOL, symbol);
@@ -114,7 +118,7 @@ contract OracleImplementation is OracleStorage {
         if (feed == address(0)) {
             revert InvalidFeed();
         }
-        blockNumber = block.number;
+        blockNumber = block.number; // for Chainlink, just return current block number
         (, value, , timestamp, ) = IChainlinkFeed(feed).latestRoundData();
         uint8 decimals = IChainlinkFeed(feed).decimals();
         if (decimals != 18) {
@@ -140,9 +144,9 @@ contract OracleImplementation is OracleStorage {
         uint256 lastTimestamp = _states[oracleId].getUint(S_TIMESTAMP);
         uint256 delayAllowance = _states[oracleId].getUint(S_DELAYALLOWANCE);
         if (
-            block.number > lastBlockNumber &&
-            timestamp > lastTimestamp &&
-            block.timestamp < timestamp + delayAllowance
+            block.number > lastBlockNumber &&            // Offchain oracle only can be updated once in same block
+            timestamp > lastTimestamp &&                 // Update value must be newer
+            block.timestamp < timestamp + delayAllowance // New value must not expire, e.g. in delay allowance
         ) {
             _states[oracleId].set(S_BLOCKNUMBER, block.number);
             _states[oracleId].set(S_TIMESTAMP, timestamp);

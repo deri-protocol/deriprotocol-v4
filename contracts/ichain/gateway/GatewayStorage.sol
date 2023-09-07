@@ -8,10 +8,13 @@ import '../../utils/ReentryLock.sol';
 
 abstract contract GatewayStorage is Admin, Implementation, ReentryLock {
 
+    // stateId => value
     mapping(uint8 => bytes32) internal _gatewayStates;
 
+    // bToken => stateId => value
     mapping(address => mapping(uint8 => bytes32)) internal _bTokenStates;
 
+    // dTokenId => stateId => value
     mapping(uint256 => mapping(uint8 => bytes32)) internal _dTokenStates;
 
 }

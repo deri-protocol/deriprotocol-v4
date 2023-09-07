@@ -10,6 +10,10 @@ import '../../library/SafeMath.sol';
 import '../../oracle/IOracle.sol';
 import '../../utils/Admin.sol';
 
+/**
+ * @title UniswapV2 Swapper Contract
+ * @dev This contract utilizes the Uniswap V2 protocol for swapping tokens.
+ */
 contract UniswapV2 is Admin {
 
     using SafeERC20 for IERC20;

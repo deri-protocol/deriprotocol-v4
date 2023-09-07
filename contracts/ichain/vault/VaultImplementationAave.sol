@@ -10,6 +10,10 @@ import '../../library/ETHAndERC20.sol';
 import '../../library/SafeMath.sol';
 import './VaultStorage.sol';
 
+/**
+ * @title Aave Protocol Vault Implementation
+ * @dev This contract serves as a vault for managing deposits within the Aave protocol.
+ */
 contract VaultImplementationAave is VaultStorage {
 
     using SafeERC20 for IERC20;
@@ -23,11 +27,11 @@ contract VaultImplementationAave is VaultStorage {
     address constant assetETH = address(1);
 
     address public immutable gateway;
-    address public immutable asset;
-    address public immutable market;
-    address public immutable weth;
-    address public immutable aavePool;
-    address public immutable rewardController;
+    address public immutable asset;             // Underlying asset, e.g. WBTC
+    address public immutable market;            // Aave market, e.g. aArbWBTC
+    address public immutable weth;              // Wrapped ETH contract
+    address public immutable aavePool;          // Aave pool
+    address public immutable rewardController;  // Aave reward controller
 
     modifier _onlyGateway_() {
         if (msg.sender != gateway) {
@@ -83,6 +87,7 @@ contract VaultImplementationAave is VaultStorage {
         }
     }
 
+    // @notice Get the asset token balance belonging to a specific 'dTokenId'
     function getBalance(uint256 dTokenId) external view returns (uint256 balance) {
         uint256 stAmount = stAmounts[dTokenId];
         if (stAmount != 0) {
@@ -90,6 +95,12 @@ contract VaultImplementationAave is VaultStorage {
         }
     }
 
+    /**
+     * @notice Deposit assets into the vault associated with a specific 'dTokenId'.
+     * @param dTokenId The unique identifier of the dToken.
+     * @param amount The amount of assets to deposit.
+     * @return mintedSt The amount of staked tokens ('mintedSt') received in exchange for the deposited assets.
+     */
     function deposit(uint256 dTokenId, uint256 amount) external payable _onlyGateway_ returns (uint256 mintedSt) {
         if (asset == assetETH) {
             amount = msg.value;
@@ -100,6 +111,8 @@ contract VaultImplementationAave is VaultStorage {
             IPool(aavePool).supply(asset, amount, address(this), 0);
         }
 
+        // Calculate the 'mintedSt' based on the total staked amount ('stTotal') and the amount of assets deposited ('amount')
+        // `mintedSt` is in 18 decimals
         uint256 stTotal = stTotalAmount;
         if (stTotal == 0) {
             mintedSt = amount.rescale(asset.decimals(), 18);
@@ -108,14 +121,22 @@ contract VaultImplementationAave is VaultStorage {
             mintedSt = stTotal * amount / (amountTotal - amount);
         }
 
+        // Update the staked amount for 'dTokenId' and the total staked amount
         stAmounts[dTokenId] += mintedSt;
         stTotalAmount += mintedSt;
     }
 
+    /**
+     * @notice Redeem staked tokens and receive assets from the vault associated with a specific 'dTokenId.'
+     * @param dTokenId The unique identifier of the dToken.
+     * @param amount The amount of asset to redeem.
+     * @return redeemedAmount The amount of assets received.
+     */
     function redeem(uint256 dTokenId, uint256 amount) external _onlyGateway_ returns (uint256 redeemedAmount) {
         uint256 stAmount = stAmounts[dTokenId];
         uint256 stTotal = stTotalAmount;
 
+        // Calculate the available assets ('available') for redemption based on staked amount ratios
         uint256 amountTotal = market.balanceOfThis();
         uint256 available = amountTotal * stAmount / stTotal;
         if (amount > available) amount = available;
@@ -131,7 +152,10 @@ contract VaultImplementationAave is VaultStorage {
             revert WithdrawError();
         }
 
+        // Calculate the staked tokens burned ('burnedSt') based on changes in the total asset balance
         uint256 burnedSt = stTotal * amount / amountTotal;
+
+        // Update the staked amount for 'dTokenId' and the total staked amount
         stAmounts[dTokenId] -= burnedSt;
         stTotalAmount -= burnedSt;
 

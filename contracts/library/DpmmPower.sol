@@ -20,7 +20,7 @@ library DpmmPower {
                int256(0);
     }
 
-    /// @dev markPrice = theoreticalPrice * (1 + k * netVolume)
+    // @dev markPrice = theoreticalPrice * (1 + k * netVolume)
     function calculateMarkPrice(
         int256 theoreticalPrice,
         int256 k,
@@ -29,6 +29,8 @@ library DpmmPower {
         return theoreticalPrice * (ONE + k * netVolume / ONE) / ONE;
     }
 
+    // @dev Cost is an integration of i * (1 + k * V) * dv
+    //      where i the theoreticalPrice, and V the netVolume
     function calculateCost(
         int256 theoreticalPrice,
         int256 k,

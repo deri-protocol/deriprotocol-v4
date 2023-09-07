@@ -8,6 +8,7 @@ library Verification {
 
     error InvalidSignature();
 
+    // @notice Verify that 'data' is signed by 'signatory' using 'sig'
     function verifyBytes(bytes memory data, bytes memory sig, address signatory) internal pure {
         bytes32 hash = ECDSA.toEthSignedMessageHash(keccak256(data));
         if (ECDSA.recover(hash, sig) != signatory) {
