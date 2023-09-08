@@ -34,6 +34,7 @@ contract GatewayImplementation is GatewayStorage {
     error InvalidRequestId();
     error InsufficientMargin();
     error InvalidSignature();
+    error InsufficientB0();
 
     event AddBToken(address bToken, address vault, bytes32 oracleId, uint256 collateralFactor);
 
@@ -919,49 +920,49 @@ contract GatewayImplementation is GatewayStorage {
         uint256 b0AmountOut; // Amount of B0 tokens going to the user.
         uint256 iouAmount;   // Amount of IOU tokens going to the trader.
 
+        // Handle excessive tokens (more than bAmountOut).
+        if (bAmount > bAmountOut) {
+            uint256 bExcessive = bAmount - bAmountOut;
+            uint256 b0ExcessiveAmount;
+            if (data.bToken == tokenB0) {
+                b0ExcessiveAmount = bExcessive;
+                bAmount -= bExcessive;
+            } else if (data.bToken == tokenETH) {
+                (uint256 resultB0, uint256 resultBX) = swapper.swapExactETHForB0{value: bExcessive}();
+                b0ExcessiveAmount = resultB0;
+                bAmount -= resultBX;
+            } else {
+                (uint256 resultB0, uint256 resultBX) = swapper.swapExactBXForB0(data.bToken, bExcessive);
+                b0ExcessiveAmount = resultB0;
+                bAmount -= resultBX;
+            }
+            b0AmountIn += b0ExcessiveAmount;
+            data.b0Amount += b0ExcessiveAmount.utoi();
+        }
+
         // Handle filling the negative B0 balance, by swapping bToken into B0, if necessary.
         if (bAmount > 0 && data.b0Amount < 0) {
             uint256 owe = (-data.b0Amount).itou();
-            uint256 tmpIn;
+            uint256 b0FillAmount;
             if (data.bToken == tokenB0) {
                 if (bAmount >= owe) {
-                    tmpIn = owe;
+                    b0FillAmount = owe;
                     bAmount -= owe;
                 } else {
-                    tmpIn = bAmount;
+                    b0FillAmount = bAmount;
                     bAmount = 0;
                 }
             } else if (data.bToken == tokenETH) {
                 (uint256 resultB0, uint256 resultBX) = swapper.swapETHForExactB0{value: bAmount}(owe);
-                tmpIn = resultB0;
+                b0FillAmount = resultB0;
                 bAmount -= resultBX;
             } else {
                 (uint256 resultB0, uint256 resultBX) = swapper.swapBXForExactB0(data.bToken, owe, bAmount);
-                tmpIn = resultB0;
+                b0FillAmount = resultB0;
                 bAmount -= resultBX;
             }
-            b0AmountIn += tmpIn;
-            data.b0Amount += tmpIn.utoi();
-        }
-
-        // Handle excessive tokens (more than bAmountOut).
-        if (bAmount > bAmountOut) {
-            uint256 bExcessive = bAmount - bAmountOut;
-            uint256 tmpIn;
-            if (data.bToken == tokenB0) {
-                tmpIn = bExcessive;
-                bAmount -= bExcessive;
-            } else if (data.bToken == tokenETH) {
-                (uint256 resultB0, uint256 resultBX) = swapper.swapExactETHForB0{value: bExcessive}();
-                tmpIn = resultB0;
-                bAmount -= resultBX;
-            } else {
-                (uint256 resultB0, uint256 resultBX) = swapper.swapExactBXForB0(data.bToken, bExcessive);
-                tmpIn = resultB0;
-                bAmount -= resultBX;
-            }
-            b0AmountIn += tmpIn;
-            data.b0Amount += tmpIn.utoi();
+            b0AmountIn += b0FillAmount;
+            data.b0Amount += b0FillAmount.utoi();
         }
 
         // Handle reserved portion when withdrawing all or operating token is tokenB0
@@ -973,21 +974,25 @@ contract GatewayImplementation is GatewayStorage {
                 amount = SafeMath.min(data.b0Amount.itou(), bAmountOut - bAmount);
             }
             if (amount > 0) {
-                uint256 tmpOut;
+                uint256 b0Out;
                 if (amount > b0AmountIn) {
                     // Redeem B0 tokens from vault0
                     uint256 b0Redeemed = vault0.redeem(uint256(0), amount - b0AmountIn);
-                    if (isTd && b0Redeemed < amount - b0AmountIn) { // b0 insufficent for trader
-                        iouAmount = amount - b0AmountIn - b0Redeemed;
+                    if (b0Redeemed < amount - b0AmountIn) { // b0 insufficent for trader
+                        if (isTd) {
+                            iouAmount = amount - b0AmountIn - b0Redeemed; // Issue IOU for trader when B0 insufficent
+                        } else {
+                            revert InsufficientB0(); // Revert for Lp when B0 insufficent
+                        }
                     }
-                    tmpOut = b0AmountIn + b0Redeemed;
+                    b0Out = b0AmountIn + b0Redeemed;
                     b0AmountIn = 0;
                 } else {
-                    tmpOut = amount;
+                    b0Out = amount;
                     b0AmountIn -= amount;
                 }
-                b0AmountOut += tmpOut;
-                data.b0Amount -= tmpOut.utoi() + iouAmount.utoi();
+                b0AmountOut += b0Out;
+                data.b0Amount -= b0Out.utoi() + iouAmount.utoi();
             }
         }
 
