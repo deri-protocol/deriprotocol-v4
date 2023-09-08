@@ -923,46 +923,46 @@ contract GatewayImplementation is GatewayStorage {
         // Handle excessive tokens (more than bAmountOut).
         if (bAmount > bAmountOut) {
             uint256 bExcessive = bAmount - bAmountOut;
-            uint256 b0ExcessiveAmount;
+            uint256 b0Excessive;
             if (data.bToken == tokenB0) {
-                b0ExcessiveAmount = bExcessive;
+                b0Excessive = bExcessive;
                 bAmount -= bExcessive;
             } else if (data.bToken == tokenETH) {
                 (uint256 resultB0, uint256 resultBX) = swapper.swapExactETHForB0{value: bExcessive}();
-                b0ExcessiveAmount = resultB0;
+                b0Excessive = resultB0;
                 bAmount -= resultBX;
             } else {
                 (uint256 resultB0, uint256 resultBX) = swapper.swapExactBXForB0(data.bToken, bExcessive);
-                b0ExcessiveAmount = resultB0;
+                b0Excessive = resultB0;
                 bAmount -= resultBX;
             }
-            b0AmountIn += b0ExcessiveAmount;
-            data.b0Amount += b0ExcessiveAmount.utoi();
+            b0AmountIn += b0Excessive;
+            data.b0Amount += b0Excessive.utoi();
         }
 
         // Handle filling the negative B0 balance, by swapping bToken into B0, if necessary.
         if (bAmount > 0 && data.b0Amount < 0) {
             uint256 owe = (-data.b0Amount).itou();
-            uint256 b0FillAmount;
+            uint256 b0Fill;
             if (data.bToken == tokenB0) {
                 if (bAmount >= owe) {
-                    b0FillAmount = owe;
+                    b0Fill = owe;
                     bAmount -= owe;
                 } else {
-                    b0FillAmount = bAmount;
+                    b0Fill = bAmount;
                     bAmount = 0;
                 }
             } else if (data.bToken == tokenETH) {
                 (uint256 resultB0, uint256 resultBX) = swapper.swapETHForExactB0{value: bAmount}(owe);
-                b0FillAmount = resultB0;
+                b0Fill = resultB0;
                 bAmount -= resultBX;
             } else {
                 (uint256 resultB0, uint256 resultBX) = swapper.swapBXForExactB0(data.bToken, owe, bAmount);
-                b0FillAmount = resultB0;
+                b0Fill = resultB0;
                 bAmount -= resultBX;
             }
-            b0AmountIn += b0FillAmount;
-            data.b0Amount += b0FillAmount.utoi();
+            b0AmountIn += b0Fill;
+            data.b0Amount += b0Fill.utoi();
         }
 
         // Handle reserved portion when withdrawing all or operating token is tokenB0
