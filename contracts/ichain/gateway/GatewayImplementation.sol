@@ -978,7 +978,7 @@ contract GatewayImplementation is GatewayStorage {
                 if (amount > b0AmountIn) {
                     // Redeem B0 tokens from vault0
                     uint256 b0Redeemed = vault0.redeem(uint256(0), amount - b0AmountIn);
-                    if (b0Redeemed < amount - b0AmountIn) { // b0 insufficent for trader
+                    if (b0Redeemed < amount - b0AmountIn) { // b0 insufficent
                         if (isTd) {
                             iouAmount = amount - b0AmountIn - b0Redeemed; // Issue IOU for trader when B0 insufficent
                         } else {
