@@ -2,9 +2,9 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-interface IPool {
+interface IEngine {
 
-    struct PoolParam {
+    struct EngineParam {
         address symbolManager;
         address oracle;
         address iChainEventSigner;
@@ -12,7 +12,7 @@ interface IPool {
         int256  protocolFeeCollectRatio;
     }
 
-    struct PoolState {
+    struct EngineState {
         int256 totalLiquidity;
         int256 lpsPnl;
         int256 cumulativePnlPerLiquidity;

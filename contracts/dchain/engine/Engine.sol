@@ -2,9 +2,9 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import './PoolStorage.sol';
+import './EngineStorage.sol';
 
-contract Pool is PoolStorage {
+contract Engine is EngineStorage {
 
     fallback() external payable {
         address imp = implementation;

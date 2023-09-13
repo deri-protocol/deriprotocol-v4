@@ -4,13 +4,13 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import '../symbol/ISymbolManager.sol';
 import '../../oracle/IOracle.sol';
-import './IPool.sol';
+import './IEngine.sol';
 import '@openzeppelin/contracts/utils/cryptography/ECDSA.sol';
 import '../../library/Bytes32Map.sol';
 import '../../library/SafeMath.sol';
-import './PoolStorage.sol';
+import './EngineStorage.sol';
 
-contract PoolImplementation is PoolStorage {
+contract EngineImplementation is EngineStorage {
 
     using Bytes32Map for mapping(uint8 => bytes32);
     using SafeMath for uint256;
@@ -86,7 +86,7 @@ contract PoolImplementation is PoolStorage {
     // Getters
     //================================================================================
 
-    function getPoolParam() external view returns (IPool.PoolParam memory p) {
+    function getEngineParam() external view returns (IEngine.EngineParam memory p) {
         p.symbolManager = address(symbolManager);
         p.oracle = address(oracle);
         p.iChainEventSigner = iChainEventSigner;
@@ -94,25 +94,25 @@ contract PoolImplementation is PoolStorage {
         p.protocolFeeCollectRatio = protocolFeeCollectRatio;
     }
 
-    function getPoolState() external view returns (IPool.PoolState memory s) {
+    function getEngineState() external view returns (IEngine.EngineState memory s) {
         s.totalLiquidity = _states.getInt(S_TOTALLIQUIDITY);
         s.lpsPnl = _states.getInt(S_LPSPNL);
         s.cumulativePnlPerLiquidity = _states.getInt(S_CUMULATIVEPNLPERLIQUIDITY);
         s.protocolFee = _states.getInt(S_PROTOCOLFEE);
     }
 
-    function getChainState(uint88 chainId) external view returns (IPool.ChainState memory s) {
+    function getChainState(uint88 chainId) external view returns (IEngine.ChainState memory s) {
         s.lastCumulativePnlOnGateway = _iStates[chainId].getInt(I_LASTCUMULATIVEPNLONGATEWAY);
     }
 
-    function getLpState(uint256 lTokenId) external view returns (IPool.LpState memory s) {
+    function getLpState(uint256 lTokenId) external view returns (IEngine.LpState memory s) {
         s.requestId = _dStates[lTokenId].getUint(D_REQUESTID);
         s.cumulativePnl = _dStates[lTokenId].getInt(D_CUMULATIVEPNL);
         s.liquidity = _dStates[lTokenId].getInt(D_LIQUIDITY);
         s.cumulativePnlPerLiquidity = _dStates[lTokenId].getInt(D_CUMULATIVEPNLPERLIQUIDITY);
     }
 
-    function getTdState(uint256 pTokenId) external view returns (IPool.TdState memory s) {
+    function getTdState(uint256 pTokenId) external view returns (IEngine.TdState memory s) {
         s.requestId = _dStates[pTokenId].getUint(D_REQUESTID);
         s.cumulativePnl = _dStates[pTokenId].getInt(D_CUMULATIVEPNL);
         s.liquidated = _dStates[pTokenId].getBool(D_LIQUIDATED);
@@ -125,7 +125,7 @@ contract PoolImplementation is PoolStorage {
     function updateLiquidity(bytes memory eventData, bytes memory eventSig, IOracle.Signature[] memory signatures) external _reentryLock_ {
         _verifyEventData(eventData, eventSig);
         oracle.updateOffchainValues(signatures);
-        IPool.VarOnUpdateLiquidity memory v = abi.decode(eventData, (IPool.VarOnUpdateLiquidity));
+        IEngine.VarOnUpdateLiquidity memory v = abi.decode(eventData, (IEngine.VarOnUpdateLiquidity));
         _updateRequestId(v.lTokenId, v.requestId);
         uint256 curLiquidity = _dStates[v.lTokenId].getInt(D_LIQUIDITY).itou();
         // Depends on liquidity change, call addLiquidity or removeLiquidity logic
@@ -139,7 +139,7 @@ contract PoolImplementation is PoolStorage {
     function removeMargin(bytes memory eventData, bytes memory eventSig, IOracle.Signature[] memory signatures) external _reentryLock_ {
         _verifyEventData(eventData, eventSig);
         oracle.updateOffchainValues(signatures);
-        IPool.VarOnRemoveMargin memory v = abi.decode(eventData, (IPool.VarOnRemoveMargin));
+        IEngine.VarOnRemoveMargin memory v = abi.decode(eventData, (IEngine.VarOnRemoveMargin));
         _updateRequestId(v.pTokenId, v.requestId);
         _removeMargin(v);
     }
@@ -147,7 +147,7 @@ contract PoolImplementation is PoolStorage {
     function trade(bytes memory eventData, bytes memory eventSig, IOracle.Signature[] memory signatures) external _reentryLock_ {
         _verifyEventData(eventData, eventSig);
         oracle.updateOffchainValues(signatures);
-        IPool.VarOnTrade memory v;
+        IEngine.VarOnTrade memory v;
         (
             v.requestId,
             v.pTokenId,
@@ -164,7 +164,7 @@ contract PoolImplementation is PoolStorage {
     function liquidate(bytes memory eventData, bytes memory eventSig, IOracle.Signature[] memory signatures) external _reentryLock_ {
         _verifyEventData(eventData, eventSig);
         oracle.updateOffchainValues(signatures);
-        IPool.VarOnLiquidate memory v = abi.decode(eventData, (IPool.VarOnLiquidate));
+        IEngine.VarOnLiquidate memory v = abi.decode(eventData, (IEngine.VarOnLiquidate));
         _updateRequestId(v.pTokenId, v.requestId);
         _liquidate(v);
     }
@@ -172,7 +172,7 @@ contract PoolImplementation is PoolStorage {
     function tradeAndRemoveMargin(bytes memory eventData, bytes memory eventSig, IOracle.Signature[] memory signatures) external _reentryLock_ {
         _verifyEventData(eventData, eventSig);
         oracle.updateOffchainValues(signatures);
-        IPool.VarOnTradeAndRemoveMargin memory v = abi.decode(eventData, (IPool.VarOnTradeAndRemoveMargin));
+        IEngine.VarOnTradeAndRemoveMargin memory v = abi.decode(eventData, (IEngine.VarOnTradeAndRemoveMargin));
         _updateRequestId(v.pTokenId, v.requestId);
         _tradeAndRemoveMargin(v);
     }
@@ -181,7 +181,7 @@ contract PoolImplementation is PoolStorage {
     // Internal Interactions
     //================================================================================
 
-    function _addLiquidity(IPool.VarOnUpdateLiquidity memory v) internal {
+    function _addLiquidity(IEngine.VarOnUpdateLiquidity memory v) internal {
         Data memory data = _getData(v.lTokenId, true);
 
         if (data.totalLiquidity > 0) {
@@ -212,7 +212,7 @@ contract PoolImplementation is PoolStorage {
         );
     }
 
-    function _removeLiquidity(IPool.VarOnUpdateLiquidity memory v) internal {
+    function _removeLiquidity(IEngine.VarOnUpdateLiquidity memory v) internal {
         Data memory data = _getData(v.lTokenId, true);
 
         int256 removedLiquidity = data.lpLiquidity - v.liquidity.utoi();
@@ -248,7 +248,7 @@ contract PoolImplementation is PoolStorage {
         );
     }
 
-    function _removeMargin(IPool.VarOnRemoveMargin memory v) internal {
+    function _removeMargin(IEngine.VarOnRemoveMargin memory v) internal {
         Data memory data = _getData(v.pTokenId, false);
 
         ISymbolManager.SettlementOnRemoveMargin memory s =
@@ -276,7 +276,7 @@ contract PoolImplementation is PoolStorage {
         );
     }
 
-    function _trade(IPool.VarOnTrade memory v) internal {
+    function _trade(IEngine.VarOnTrade memory v) internal {
         Data memory data = _getData(v.pTokenId, false);
 
         ISymbolManager.SettlementOnTrade memory s = symbolManager.settleSymbolsOnTrade(
@@ -304,7 +304,7 @@ contract PoolImplementation is PoolStorage {
         _saveData(data, v.pTokenId, false);
     }
 
-    function _liquidate(IPool.VarOnLiquidate memory v) internal {
+    function _liquidate(IEngine.VarOnLiquidate memory v) internal {
         Data memory data = _getData(v.pTokenId, false);
 
         ISymbolManager.SettlementOnLiquidate memory s = symbolManager.settleSymbolsOnLiquidate(
@@ -338,8 +338,8 @@ contract PoolImplementation is PoolStorage {
         );
     }
 
-    function _tradeAndRemoveMargin(IPool.VarOnTradeAndRemoveMargin memory v) internal {
-        _trade(IPool.VarOnTrade({
+    function _tradeAndRemoveMargin(IEngine.VarOnTradeAndRemoveMargin memory v) internal {
+        _trade(IEngine.VarOnTrade({
             requestId: v.requestId,
             pTokenId: v.pTokenId,
             margin: v.margin,
@@ -348,7 +348,7 @@ contract PoolImplementation is PoolStorage {
             symbolId: v.symbolId,
             tradeParams: v.tradeParams
         }));
-        _removeMargin(IPool.VarOnRemoveMargin({
+        _removeMargin(IEngine.VarOnRemoveMargin({
             requestId: v.requestId,
             pTokenId: v.pTokenId,
             margin: v.margin,
@@ -363,7 +363,7 @@ contract PoolImplementation is PoolStorage {
     //================================================================================
 
     struct Data {
-        // pool states
+        // Engine states
         int256 totalLiquidity;
         int256 lpsPnl;
         int256 cumulativePnlPerLiquidity;

@@ -6,7 +6,7 @@ import '../../utils/Admin.sol';
 import '../../utils/Implementation.sol';
 import '../../utils/ReentryLock.sol';
 
-abstract contract PoolStorage is Admin, Implementation, ReentryLock {
+abstract contract EngineStorage is Admin, Implementation, ReentryLock {
 
     // stateId => value
     mapping(uint8 => bytes32) internal _states;

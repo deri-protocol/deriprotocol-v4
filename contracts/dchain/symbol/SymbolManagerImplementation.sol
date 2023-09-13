@@ -21,7 +21,7 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
     using EnumerableSet for EnumerableSet.UintSet;
     using EnumerableSet for EnumerableSet.Bytes32Set;
 
-    error OnlyPool();
+    error OnlyEngine();
     error InvalidCategory(bytes32 symbolId, uint8 category);
     error ExistedSymbolId(bytes32 symbolId);
     error InvalidSymbolId(bytes32 symbolId);
@@ -33,18 +33,18 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
     uint8 constant CATEGORY_OPTION  = 2;
     uint8 constant CATEGORY_POWER   = 3;
 
-    address public immutable pool;
+    address public immutable engine;
     address public immutable oracle;
 
-    modifier _onlyPool_() {
-        if (msg.sender != pool) {
-            revert OnlyPool();
+    modifier _onlyEngine_() {
+        if (msg.sender != engine) {
+            revert OnlyEngine();
         }
         _;
     }
 
-    constructor (address pool_, address oracle_) {
-        pool = pool_;
+    constructor (address engine_, address oracle_) {
+        engine = engine_;
         oracle = oracle_;
     }
 
@@ -159,7 +159,7 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
     //================================================================================
 
     function settleSymbolsOnAddLiquidity(int256 liquidity)
-    external _onlyPool_ returns (ISymbolManager.SettlementOnAddLiquidity memory ss)
+    external _onlyEngine_ returns (ISymbolManager.SettlementOnAddLiquidity memory ss)
     {
         int256 diffInitialMarginRequired;
         uint256 length = _symbolIds.length();
@@ -179,7 +179,7 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
     }
 
     function settleSymbolsOnRemoveLiquidity(int256 liquidity, int256 removedLiquidity)
-    external _onlyPool_ returns (ISymbolManager.SettlementOnRemoveLiquidity memory ss)
+    external _onlyEngine_ returns (ISymbolManager.SettlementOnRemoveLiquidity memory ss)
     {
         int256 diffInitialMarginRequired;
         uint256 length = _symbolIds.length();
@@ -201,7 +201,7 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
     }
 
     function settleSymbolsOnRemoveMargin(uint256 pTokenId, int256 liquidity)
-    external _onlyPool_ returns (ISymbolManager.SettlementOnRemoveMargin memory ss)
+    external _onlyEngine_ returns (ISymbolManager.SettlementOnRemoveMargin memory ss)
     {
         int256 diffInitialMarginRequired;
         uint256 length = _tdSymbolIds[pTokenId].length();
@@ -222,7 +222,7 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
     }
 
     function settleSymbolsOnTrade(bytes32 symbolId, uint256 pTokenId, int256 liquidity, int256[] memory tradeParams)
-    external _onlyPool_ returns (ISymbolManager.SettlementOnTrade memory ss)
+    external _onlyEngine_ returns (ISymbolManager.SettlementOnTrade memory ss)
     {
         int256 diffInitialMarginRequired;
         uint256 length = _tdSymbolIds[pTokenId].length();
@@ -270,7 +270,7 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
     }
 
     function settleSymbolsOnLiquidate(uint256 pTokenId, int256 liquidity)
-    external _onlyPool_ returns (ISymbolManager.SettlementOnLiquidate memory ss)
+    external _onlyEngine_ returns (ISymbolManager.SettlementOnLiquidate memory ss)
     {
         int256 diffInitialMarginRequired;
         uint256 length = _tdSymbolIds[pTokenId].length();
