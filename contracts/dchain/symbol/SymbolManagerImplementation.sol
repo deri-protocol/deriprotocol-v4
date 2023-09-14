@@ -3,6 +3,7 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import '@openzeppelin/contracts/utils/structs/EnumerableSet.sol';
+import '../../library/Bytes32.sol';
 import '../../library/Bytes32Map.sol';
 import '../../oracle/IOracle.sol';
 import './ISymbolManager.sol';
@@ -53,7 +54,7 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
     //================================================================================
 
     function getSymbolId(string memory symbol, uint8 category) public pure returns (bytes32 symbolId) {
-        symbolId = Bytes32Map.stringToBytes32(symbol);
+        symbolId = Bytes32.toBytes32(symbol);
         symbolId |= bytes32(uint256(category));
     }
 

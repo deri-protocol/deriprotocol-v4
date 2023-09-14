@@ -86,15 +86,12 @@ contract EngineImplementation is EngineStorage {
     // Getters
     //================================================================================
 
-    function getEngineParam() external view returns (IEngine.EngineParam memory p) {
-        p.symbolManager = address(symbolManager);
-        p.oracle = address(oracle);
-        p.iChainEventSigner = iChainEventSigner;
-        p.initialMarginMultiplier = initialMarginMultiplier;
-        p.protocolFeeCollectRatio = protocolFeeCollectRatio;
-    }
-
     function getEngineState() external view returns (IEngine.EngineState memory s) {
+        s.symbolManager = address(symbolManager);
+        s.oracle = address(oracle);
+        s.iChainEventSigner = iChainEventSigner;
+        s.initialMarginMultiplier = initialMarginMultiplier;
+        s.protocolFeeCollectRatio = protocolFeeCollectRatio;
         s.totalLiquidity = _states.getInt(S_TOTALLIQUIDITY);
         s.lpsPnl = _states.getInt(S_LPSPNL);
         s.cumulativePnlPerLiquidity = _states.getInt(S_CUMULATIVEPNLPERLIQUIDITY);

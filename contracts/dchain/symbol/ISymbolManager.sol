@@ -44,6 +44,26 @@ interface ISymbolManager {
         int256 tradeRealizedCost;
     }
 
+    function getSymbolId(string memory symbol, uint8 category) external pure returns (bytes32 symbolId);
+
+    function getCategory(bytes32 symbolId) external pure returns (uint8);
+
+    function getSymbolIds() external view returns (bytes32[] memory);
+
+    function getPTokenIdsOfSymbol(bytes32 symbolId) external view returns (uint256[] memory);
+
+    function getSymbolIdsOfPToken(uint256 pTokenId) external view returns (bytes32[] memory);
+
+    function getState(bytes32 symbolId) external view returns (bytes32[] memory s);
+
+    function getPosition(bytes32 symbolId, uint256 pTokenId) external view returns (bytes32[] memory pos);
+
+    function addSymbol(string memory symbol, uint8 category, bytes32[] memory p) external;
+
+    function setParameterOfId(string memory symbol, uint8 category, uint8 parameterId, bytes32 value) external;
+
+    function setParameterOfIdForCategory(uint8 category, uint8 parameterId, bytes32 value) external;
+
     function settleSymbolsOnAddLiquidity(int256 liquidity)
     external returns (SettlementOnAddLiquidity memory ss);
 

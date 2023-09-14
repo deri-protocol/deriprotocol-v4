@@ -2,17 +2,16 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
+import '../../oracle/IOracle.sol';
+
 interface IEngine {
 
-    struct EngineParam {
+    struct EngineState {
         address symbolManager;
         address oracle;
         address iChainEventSigner;
         int256  initialMarginMultiplier;
         int256  protocolFeeCollectRatio;
-    }
-
-    struct EngineState {
         int256 totalLiquidity;
         int256 lpsPnl;
         int256 cumulativePnlPerLiquidity;
@@ -82,5 +81,23 @@ interface IEngine {
         bytes32 symbolId;
         int256[] tradeParams;
     }
+
+    function getEngineState() external view returns (EngineState memory s);
+
+    function getChainState(uint88 chainId) external view returns (ChainState memory s);
+
+    function getLpState(uint256 lTokenId) external view returns (LpState memory s);
+
+    function getTdState(uint256 pTokenId) external view returns (TdState memory s);
+
+    function updateLiquidity(bytes memory eventData, bytes memory eventSig, IOracle.Signature[] memory signatures) external;
+
+    function removeMargin(bytes memory eventData, bytes memory eventSig, IOracle.Signature[] memory signatures) external;
+
+    function trade(bytes memory eventData, bytes memory eventSig, IOracle.Signature[] memory signatures) external;
+
+    function liquidate(bytes memory eventData, bytes memory eventSig, IOracle.Signature[] memory signatures) external;
+
+    function tradeAndRemoveMargin(bytes memory eventData, bytes memory eventSig, IOracle.Signature[] memory signatures) external;
 
 }
