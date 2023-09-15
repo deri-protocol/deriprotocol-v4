@@ -48,6 +48,7 @@ interface IGateway {
         uint256 bAmount;
         int256  b0Amount;
         int256  lastCumulativePnlOnEngine;
+        bool    isolated;
     }
 
     struct VarOnExecuteUpdateLiquidity {
