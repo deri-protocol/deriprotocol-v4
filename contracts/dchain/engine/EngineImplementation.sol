@@ -19,7 +19,7 @@ contract EngineImplementation is EngineStorage {
     error InvalidSignature();
     error InvalidRequestId();
     error InsufficientLiquidity();
-    error InvalidPTokenId();
+    error DTokenLiquidated();
     error InsufficientMargin();
     error NoMaintenanceMarginRequired();
     error CanNotLiquidate();
@@ -172,6 +172,51 @@ contract EngineImplementation is EngineStorage {
         IEngine.VarOnTradeAndRemoveMargin memory v = abi.decode(eventData, (IEngine.VarOnTradeAndRemoveMargin));
         _updateRequestId(v.pTokenId, v.requestId);
         _tradeAndRemoveMargin(v);
+    }
+
+    //================================================================================
+    // Terminations when decoupling i-chain
+    //================================================================================
+
+    // @notice Terminate traders' positions when corresponding i-chain become permanently inactive
+    function terminateTds(uint256[] memory pTokenIds, IOracle.Signature[] memory signatures) external _onlyAdmin_ {
+        oracle.updateOffchainValues(signatures);
+        for (uint256 i = 0; i < pTokenIds.length; i++) {
+            _terminateTd(pTokenIds[i]);
+        }
+    }
+
+    // @notice Terminate Lps when corresponding i-chain become permanently inactive
+    function terminateLps(uint256[] memory lTokenIds, IOracle.Signature[] memory signatures) external _onlyAdmin_ {
+        oracle.updateOffchainValues(signatures);
+        for (uint256 i = 0; i < lTokenIds.length; i++) {
+            _terminateLp(lTokenIds[i]);
+        }
+    }
+
+    // @notice Settle i-chain Pnl after termination, when i-chain become permanently inactive
+    // @param terminationPnl Pnl calculated during termination for all Lp and Td
+    // @param totalB0Amount Total b0Amount recorded on i-chain for all Lp and Td
+    // @param vault0B0Amount b0Amount in i-chain's vault0 reserve
+    // @param iouAmount IOU amount issue on i-chain
+    function settleIChainPnlAfterTermination(
+        int256 terminationPnl,
+        int256 totalB0Amount,
+        int256 vault0B0Amount,
+        int256 iouAmount
+    ) external _onlyAdmin_ {
+        int256 totalLiquidity = _states.getInt(S_TOTALLIQUIDITY);
+        int256 lpsPnl = _states.getInt(S_LPSPNL);
+        int256 cumulativePnlPerLiquidity = _states.getInt(S_CUMULATIVEPNLPERLIQUIDITY);
+
+        int256 pnl = terminationPnl + totalB0Amount - vault0B0Amount + iouAmount;
+        lpsPnl += pnl;
+        cumulativePnlPerLiquidity = cumulativePnlPerLiquidity.addUnchecked(
+            pnl * ONE / totalLiquidity
+        );
+
+        _states.set(S_LPSPNL, lpsPnl);
+        _states.set(S_CUMULATIVEPNLPERLIQUIDITY, cumulativePnlPerLiquidity);
     }
 
     //================================================================================
@@ -355,6 +400,41 @@ contract EngineImplementation is EngineStorage {
         }));
     }
 
+    function _terminateTd(uint256 pTokenId) internal {
+        Data memory data = _getData(pTokenId, false);
+
+        ISymbolManager.SettlementOnLiquidate memory s = symbolManager.settleSymbolsOnLiquidate(
+            pTokenId, data.totalLiquidity + data.lpsPnl
+        );
+
+        int256 undistributedPnl = s.funding - s.diffTradersPnl + s.tradeRealizedCost;
+        _settleUndistributedPnl(data, undistributedPnl);
+
+        data.cumulativePnl = data.cumulativePnl.minusUnchecked(s.traderFunding + s.tradeRealizedCost);
+
+        _saveData(data, pTokenId, false);
+        _dStates[pTokenId].set(D_LIQUIDATED, true);
+    }
+
+    function _terminateLp(uint256 lTokenId) internal {
+        Data memory data = _getData(lTokenId, true);
+
+        ISymbolManager.SettlementOnRemoveLiquidity memory s =
+            symbolManager.settleSymbolsOnRemoveLiquidity(data.totalLiquidity + data.lpsPnl, data.lpLiquidity);
+
+        int256 undistributedPnl = s.funding - s.diffTradersPnl + s.removeLiquidityPenalty;
+        _settleUndistributedPnl(data, undistributedPnl);
+
+        data.cumulativePnl = data.cumulativePnl.minusUnchecked(s.removeLiquidityPenalty);
+        _settleLp(data);
+
+        data.totalLiquidity -= data.lpLiquidity;
+        data.lpLiquidity = 0;
+
+        _saveData(data, lTokenId, true);
+        _dStates[lTokenId].set(D_LIQUIDATED, true);
+    }
+
     //================================================================================
     // Internals
     //================================================================================
@@ -384,10 +464,9 @@ contract EngineImplementation is EngineStorage {
         if (isLp) {
             data.lpLiquidity = _dStates[dTokenId].getInt(D_LIQUIDITY);
             data.lpCumulativePnlPerLiqudity = _dStates[dTokenId].getInt(D_CUMULATIVEPNLPERLIQUIDITY);
-        } else {
-            if (_dStates[dTokenId].getBool(D_LIQUIDATED)) {
-                revert InvalidPTokenId();
-            }
+        }
+        if (_dStates[dTokenId].getBool(D_LIQUIDATED)) {
+            revert DTokenLiquidated();
         }
         data.cumulativePnl = _dStates[dTokenId].getInt(D_CUMULATIVEPNL);
     }
