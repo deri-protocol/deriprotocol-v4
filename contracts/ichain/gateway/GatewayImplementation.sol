@@ -43,6 +43,8 @@ contract GatewayImplementation is GatewayStorage {
 
     event UpdateBToken(address bToken);
 
+    event SetExecutionFee(uint256 actionId, uint256 executionFee);
+
     event RequestUpdateLiquidity(
         uint256 requestId,
         uint256 lTokenId,
@@ -341,6 +343,7 @@ contract GatewayImplementation is GatewayStorage {
     // @notice Set execution fee for actionId
     function setExecutionFee(uint256 actionId, uint256 executionFee) external _onlyAdmin_ {
         _executionFees[actionId] = executionFee;
+        emit SetExecutionFee(actionId, executionFee);
     }
 
     // @notic Claim executionFee to account `to`
