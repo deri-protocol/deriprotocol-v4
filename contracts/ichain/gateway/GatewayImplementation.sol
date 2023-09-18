@@ -142,7 +142,7 @@ contract GatewayImplementation is GatewayStorage {
     uint8 constant D_LIQUIDITY                      = 5; // Lp liquidity
     uint8 constant D_CUMULATIVETIME                 = 6; // Lp cumulative time
     uint8 constant D_LASTCUMULATIVETIMEPERLIQUIDITY = 7; // Lp last cumulative time per liquidity
-    uint8 constant D_ISOLATED                       = 8; // Td isolated margin flag
+    uint8 constant D_SINGLEPOSITION                 = 8; // Td single position flag
 
     uint256 constant ACTION_REQUESTADDLIQUIDITY         = 1;
     uint256 constant ACTION_REQUESTREMOVELIQUIDITY      = 2;
@@ -245,7 +245,7 @@ contract GatewayImplementation is GatewayStorage {
         s.bAmount = IVault(_bTokenStates[s.bToken].getAddress(B_VAULT)).getBalance(pTokenId);
         s.b0Amount = _dTokenStates[pTokenId].getInt(D_B0AMOUNT);
         s.lastCumulativePnlOnEngine = _dTokenStates[pTokenId].getInt(D_LASTCUMULATIVEPNLONENGINE);
-        s.isolated = _dTokenStates[pTokenId].getBool(D_ISOLATED);
+        s.singlePosition = _dTokenStates[pTokenId].getBool(D_SINGLEPOSITION);
     }
 
     // @notice Calculate Lp's cumulative time, used in liquidity mining reward distributions
@@ -445,14 +445,14 @@ contract GatewayImplementation is GatewayStorage {
      * @param pTokenId The unique identifier of the PToken.
      * @param bToken The address of the base token to add as margin.
      * @param bAmount The amount of base tokens to add as margin.
-     * @param isolated The flag whether trader is using isolated margin.
+     * @param singlePosition The flag whether trader is using singlePosition margin.
      * @return The unique identifier pTokenId.
      */
-    function requestAddMargin(uint256 pTokenId, address bToken, uint256 bAmount, bool isolated) public payable returns (uint256) {
+    function requestAddMargin(uint256 pTokenId, address bToken, uint256 bAmount, bool singlePosition) public payable returns (uint256) {
         if (pTokenId == 0) {
             pTokenId = pToken.mint(msg.sender);
-            if (isolated) {
-                _dTokenStates[pTokenId].set(D_ISOLATED, true);
+            if (singlePosition) {
+                _dTokenStates[pTokenId].set(D_SINGLEPOSITION, true);
             }
         } else {
             _checkPTokenIdOwner(pTokenId, msg.sender);
@@ -572,7 +572,7 @@ contract GatewayImplementation is GatewayStorage {
      * @param bAmount The amount of base tokens to add as margin.
      * @param symbolId The identifier of the trading symbol for the trade.
      * @param tradeParams An array of trade parameters for the trade execution.
-     * @param isolated The flag whether trader is using isolated margin.
+     * @param singlePosition The flag whether trader is using singlePosition margin.
      */
     function requestAddMarginAndTrade(
         uint256 pTokenId,
@@ -580,9 +580,9 @@ contract GatewayImplementation is GatewayStorage {
         uint256 bAmount,
         bytes32 symbolId,
         int256[] calldata tradeParams,
-        bool isolated
+        bool singlePosition
     ) external payable {
-        pTokenId = requestAddMargin(pTokenId, bToken, bAmount, isolated);
+        pTokenId = requestAddMargin(pTokenId, bToken, bAmount, singlePosition);
         requestTrade(pTokenId, symbolId, tradeParams);
     }
 
