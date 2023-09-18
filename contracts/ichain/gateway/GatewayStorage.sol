@@ -17,4 +17,7 @@ abstract contract GatewayStorage is Admin, Implementation, ReentryLock {
     // dTokenId => stateId => value
     mapping(uint256 => mapping(uint8 => bytes32)) internal _dTokenStates;
 
+    // actionId => executionFee
+    mapping(uint256 => uint256) internal _executionFees;
+
 }

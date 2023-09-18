@@ -35,6 +35,7 @@ contract GatewayImplementation is GatewayStorage {
     error InsufficientMargin();
     error InvalidSignature();
     error InsufficientB0();
+    error InsufficientExecutionFee();
 
     event AddBToken(address bToken, address vault, bytes32 oracleId, uint256 collateralFactor);
 
@@ -142,6 +143,12 @@ contract GatewayImplementation is GatewayStorage {
     uint8 constant D_CUMULATIVETIME                 = 6; // Lp cumulative time
     uint8 constant D_LASTCUMULATIVETIMEPERLIQUIDITY = 7; // Lp last cumulative time per liquidity
     uint8 constant D_ISOLATED                       = 8; // Td isolated margin flag
+
+    uint256 constant ACTION_REQUESTADDLIQUIDITY         = 1;
+    uint256 constant ACTION_REQUESTREMOVELIQUIDITY      = 2;
+    uint256 constant ACTION_REQUESTREMOVEMARGIN         = 3;
+    uint256 constant ACTION_REQUESTTRADE                = 4;
+    uint256 constant ACTION_REQUESTTRADEANDREMOVEMARGIN = 5;
 
     uint256 constant UONE = 1e18;
     int256  constant ONE = 1e18;
@@ -264,6 +271,15 @@ contract GatewayImplementation is GatewayStorage {
         }
     }
 
+    function getExecutionFees() public view returns (uint256[] memory fees) {
+        fees = new uint256[](5);
+        fees[0] = _executionFees[ACTION_REQUESTADDLIQUIDITY];
+        fees[1] = _executionFees[ACTION_REQUESTREMOVELIQUIDITY];
+        fees[2] = _executionFees[ACTION_REQUESTREMOVEMARGIN];
+        fees[3] = _executionFees[ACTION_REQUESTTRADE];
+        fees[4] = _executionFees[ACTION_REQUESTTRADEANDREMOVEMARGIN];
+    }
+
     //================================================================================
     // Setters
     //================================================================================
@@ -322,6 +338,16 @@ contract GatewayImplementation is GatewayStorage {
         emit UpdateBToken(bToken);
     }
 
+    // @notice Set execution fee for actionId
+    function setExecutionFee(uint256 actionId, uint256 executionFee) external _onlyAdmin_ {
+        _executionFees[actionId] = executionFee;
+    }
+
+    // @notic Claim executionFee to account `to`
+    function claimExecutionFee(address to) external _onlyAdmin_ {
+        tokenETH.transferOut(to, tokenETH.balanceOfThis());
+    }
+
     //================================================================================
     // Interactions
     //================================================================================
@@ -353,8 +379,9 @@ contract GatewayImplementation is GatewayStorage {
 
         Data memory data = _getData(msg.sender, lTokenId, bToken);
 
+        uint256 ethAmount = _receiveExecutionFee(_executionFees[ACTION_REQUESTADDLIQUIDITY]);
         if (bToken == tokenETH) {
-            bAmount = msg.value;
+            bAmount = ethAmount;
         }
         if (bAmount == 0) {
             revert InvalidBAmount();
@@ -386,9 +413,10 @@ contract GatewayImplementation is GatewayStorage {
      * @param bToken The address of the base token to remove as liquidity.
      * @param bAmount The amount of base tokens to remove as liquidity.
      */
-    function requestRemoveLiquidity(uint256 lTokenId, address bToken, uint256 bAmount) external {
+    function requestRemoveLiquidity(uint256 lTokenId, address bToken, uint256 bAmount) external payable {
         _checkLTokenIdOwner(lTokenId, msg.sender);
 
+        _receiveExecutionFee(_executionFees[ACTION_REQUESTREMOVELIQUIDITY]);
         if (bAmount == 0) {
             revert InvalidBAmount();
         }
@@ -464,9 +492,10 @@ contract GatewayImplementation is GatewayStorage {
      * @param bToken The address of the base token to remove as margin.
      * @param bAmount The amount of base tokens to remove as margin.
      */
-    function requestRemoveMargin(uint256 pTokenId, address bToken, uint256 bAmount) external {
+    function requestRemoveMargin(uint256 pTokenId, address bToken, uint256 bAmount) external payable {
         _checkPTokenIdOwner(pTokenId, msg.sender);
 
+        _receiveExecutionFee(_executionFees[ACTION_REQUESTREMOVEMARGIN]);
         if (bAmount == 0) {
             revert InvalidBAmount();
         }
@@ -496,8 +525,10 @@ contract GatewayImplementation is GatewayStorage {
      * @param symbolId The identifier of the trading symbol.
      * @param tradeParams An array of trade parameters for the trade execution.
      */
-    function requestTrade(uint256 pTokenId, bytes32 symbolId, int256[] calldata tradeParams) public {
+    function requestTrade(uint256 pTokenId, bytes32 symbolId, int256[] calldata tradeParams) public payable {
         _checkPTokenIdOwner(pTokenId, msg.sender);
+
+        _receiveExecutionFee(_executionFees[ACTION_REQUESTTRADE]);
 
         Data memory data = _getData(msg.sender, pTokenId, _dTokenStates[pTokenId].getAddress(D_BTOKEN));
         _getExParams(data);
@@ -572,6 +603,7 @@ contract GatewayImplementation is GatewayStorage {
     ) external {
         _checkPTokenIdOwner(pTokenId, msg.sender);
 
+        _receiveExecutionFee(_executionFees[ACTION_REQUESTTRADEANDREMOVEMARGIN]);
         if (bAmount == 0) {
             revert InvalidBAmount();
         }
@@ -831,6 +863,13 @@ contract GatewayImplementation is GatewayStorage {
         if (pToken.ownerOf(pTokenId) != owner) {
             revert InvalidPTokenId();
         }
+    }
+
+    function _receiveExecutionFee(uint256 executionFee) internal view returns (uint256) {
+        if (msg.value < executionFee) {
+            revert InsufficientExecutionFee();
+        }
+        return msg.value - executionFee;
     }
 
     // @dev bPrice * bAmount / UONE = b0Amount, b0Amount in decimalsB0
