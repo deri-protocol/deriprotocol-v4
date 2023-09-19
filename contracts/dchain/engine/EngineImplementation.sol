@@ -302,8 +302,8 @@ contract EngineImplementation is EngineStorage {
         data.cumulativePnl = data.cumulativePnl.minusUnchecked(s.traderFunding);
 
         int256 realizedPnl = data.cumulativePnl.minusUnchecked(v.lastCumulativePnlOnEngine);
-        int256 requiredRealMoneyForMargin = SafeMath.max(s.traderInitialMarginRequired - s.traderPnl, int256(0));
-        if (v.realMoneyMargin.utoi() + realizedPnl < requiredRealMoneyForMargin) {
+        int256 requiredRealMoneyMargin = SafeMath.max(s.traderInitialMarginRequired - s.traderPnl, int256(0));
+        if (v.realMoneyMargin.utoi() + realizedPnl < requiredRealMoneyMargin) {
             revert InsufficientMargin();
         }
 
@@ -312,7 +312,7 @@ contract EngineImplementation is EngineStorage {
         emit ExecuteRemoveMargin(
             v.requestId,
             v.pTokenId,
-            requiredRealMoneyForMargin.itou(),
+            requiredRealMoneyMargin.itou(),
             data.cumulativePnl,
             v.bAmount
         );
