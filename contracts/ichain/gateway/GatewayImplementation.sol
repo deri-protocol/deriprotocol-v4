@@ -57,7 +57,7 @@ contract GatewayImplementation is GatewayStorage {
     event RequestRemoveMargin(
         uint256 requestId,
         uint256 pTokenId,
-        uint256 margin,
+        uint256 realMoneyMargin,
         int256  lastCumulativePnlOnEngine,
         int256  cumulativePnlOnGateway,
         uint256 bAmount
@@ -66,7 +66,7 @@ contract GatewayImplementation is GatewayStorage {
     event RequestTrade(
         uint256 requestId,
         uint256 pTokenId,
-        uint256 margin,
+        uint256 realMoneyMargin,
         int256  lastCumulativePnlOnEngine,
         int256  cumulativePnlOnGateway,
         bytes32 symbolId,
@@ -76,7 +76,7 @@ contract GatewayImplementation is GatewayStorage {
     event RequestLiquidate(
         uint256 requestId,
         uint256 pTokenId,
-        uint256 margin,
+        uint256 realMoneyMargin,
         int256  lastCumulativePnlOnEngine,
         int256  cumulativePnlOnGateway
     );
@@ -84,7 +84,7 @@ contract GatewayImplementation is GatewayStorage {
     event RequestTradeAndRemoveMargin(
         uint256 requestId,
         uint256 pTokenId,
-        uint256 margin,
+        uint256 realMoneyMargin,
         int256  lastCumulativePnlOnEngine,
         int256  cumulativePnlOnGateway,
         uint256 bAmount,
@@ -535,13 +535,13 @@ contract GatewayImplementation is GatewayStorage {
 
         Data memory data = _getData(msg.sender, pTokenId, _dTokenStates[pTokenId].getAddress(D_BTOKEN));
         _getExParams(data);
-        uint256 margin = _getDTokenLiquidity(data);
+        uint256 realMoneyMargin = _getDTokenLiquidity(data);
 
         uint256 requestId = _incrementRequestId(pTokenId);
         emit RequestTrade(
             requestId,
             pTokenId,
-            margin,
+            realMoneyMargin,
             data.lastCumulativePnlOnEngine,
             data.cumulativePnlOnGateway,
             symbolId,
@@ -556,13 +556,13 @@ contract GatewayImplementation is GatewayStorage {
     function requestLiquidate(uint256 pTokenId) external {
         Data memory data = _getData(pToken.ownerOf(pTokenId), pTokenId, _dTokenStates[pTokenId].getAddress(D_BTOKEN));
         _getExParams(data);
-        uint256 margin = _getDTokenLiquidity(data);
+        uint256 realMoneyMargin = _getDTokenLiquidity(data);
 
         uint256 requestId = _incrementRequestId(pTokenId);
         emit RequestLiquidate(
             requestId,
             pTokenId,
-            margin,
+            realMoneyMargin,
             data.lastCumulativePnlOnEngine,
             data.cumulativePnlOnGateway
         );

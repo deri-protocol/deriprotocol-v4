@@ -148,7 +148,7 @@ contract EngineImplementation is EngineStorage {
         (
             v.requestId,
             v.pTokenId,
-            v.margin,
+            v.realMoneyMargin,
             v.lastCumulativePnlOnEngine,
             v.cumulativePnlOnGateway,
             v.symbolId,
@@ -303,7 +303,7 @@ contract EngineImplementation is EngineStorage {
 
         int256 realizedPnl = data.cumulativePnl.minusUnchecked(v.lastCumulativePnlOnEngine);
         int256 requiredRealMoneyForMargin = SafeMath.max(s.traderInitialMarginRequired - s.traderPnl, int256(0));
-        if (v.margin.utoi() + realizedPnl < requiredRealMoneyForMargin) {
+        if (v.realMoneyMargin.utoi() + realizedPnl < requiredRealMoneyForMargin) {
             revert InsufficientMargin();
         }
 
@@ -339,7 +339,7 @@ contract EngineImplementation is EngineStorage {
 
         int256 pnl = data.cumulativePnl.minusUnchecked(v.lastCumulativePnlOnEngine);
         int256 requiredMargin = s.traderInitialMarginRequired - s.traderPnl;
-        if (v.margin.utoi() + pnl < requiredMargin) {
+        if (v.realMoneyMargin.utoi() + pnl < requiredMargin) {
             revert InsufficientMargin();
         }
 
@@ -363,7 +363,7 @@ contract EngineImplementation is EngineStorage {
 
         data.cumulativePnl = data.cumulativePnl.minusUnchecked(s.traderFunding);
 
-        int256 availableMargin = v.margin.utoi() + data.cumulativePnl.minusUnchecked(v.lastCumulativePnlOnEngine);
+        int256 availableMargin = v.realMoneyMargin.utoi() + data.cumulativePnl.minusUnchecked(v.lastCumulativePnlOnEngine);
         if (availableMargin + s.traderPnl > s.traderMaintenanceMarginRequired) {
             revert CanNotLiquidate();
         }
@@ -384,7 +384,7 @@ contract EngineImplementation is EngineStorage {
         _trade(IEngine.VarOnTrade({
             requestId: v.requestId,
             pTokenId: v.pTokenId,
-            margin: v.margin,
+            realMoneyMargin: v.realMoneyMargin,
             lastCumulativePnlOnEngine: v.lastCumulativePnlOnEngine,
             cumulativePnlOnGateway: v.cumulativePnlOnGateway,
             symbolId: v.symbolId,
@@ -393,7 +393,7 @@ contract EngineImplementation is EngineStorage {
         _removeMargin(IEngine.VarOnRemoveMargin({
             requestId: v.requestId,
             pTokenId: v.pTokenId,
-            margin: v.margin,
+            realMoneyMargin: v.realMoneyMargin,
             lastCumulativePnlOnEngine: v.lastCumulativePnlOnEngine,
             cumulativePnlOnGateway: v.cumulativePnlOnGateway,
             bAmount: v.bAmount

@@ -47,7 +47,7 @@ interface IEngine {
     struct VarOnRemoveMargin {
         uint256 requestId;
         uint256 pTokenId;
-        uint256 margin;
+        uint256 realMoneyMargin;
         int256  lastCumulativePnlOnEngine;
         int256  cumulativePnlOnGateway;
         uint256 bAmount;
@@ -56,7 +56,7 @@ interface IEngine {
     struct VarOnTrade {
         uint256 requestId;
         uint256 pTokenId;
-        uint256 margin;
+        uint256 realMoneyMargin;
         int256  lastCumulativePnlOnEngine;
         int256  cumulativePnlOnGateway;
         bytes32 symbolId;
@@ -66,7 +66,7 @@ interface IEngine {
     struct VarOnLiquidate {
         uint256 requestId;
         uint256 pTokenId;
-        uint256 margin;
+        uint256 realMoneyMargin;
         int256  lastCumulativePnlOnEngine;
         int256  cumulativePnlOnGateway;
     }
@@ -74,7 +74,7 @@ interface IEngine {
     struct VarOnTradeAndRemoveMargin {
         uint256 requestId;
         uint256 pTokenId;
-        uint256 margin;
+        uint256 realMoneyMargin;
         int256  lastCumulativePnlOnEngine;
         int256  cumulativePnlOnGateway;
         uint256 bAmount;
