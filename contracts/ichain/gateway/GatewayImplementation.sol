@@ -820,9 +820,7 @@ contract GatewayImplementation is GatewayStorage {
         data.b0Amount = _dTokenStates[dTokenId].getInt(D_B0AMOUNT);
         data.lastCumulativePnlOnEngine = _dTokenStates[dTokenId].getInt(D_LASTCUMULATIVEPNLONENGINE);
 
-        if (IVault(data.vault).stAmounts(dTokenId) != 0) {
-            _checkBTokenConsistency(dTokenId, bToken);
-        }
+        _checkBTokenConsistency(dTokenId, bToken);
     }
 
     function _saveData(Data memory data) internal {
@@ -851,8 +849,12 @@ contract GatewayImplementation is GatewayStorage {
     }
 
     function _checkBTokenConsistency(uint256 dTokenId, address bToken) internal view {
-        if (bToken == address(0) || _dTokenStates[dTokenId].getAddress(D_BTOKEN) != bToken) {
-            revert InvalidBToken();
+        address preBToken = _dTokenStates[dTokenId].getAddress(D_BTOKEN);
+        if (preBToken != address(0) && preBToken != bToken) {
+            uint256 stAmount = IVault(_bTokenStates[preBToken].getAddress(B_VAULT)).stAmounts(dTokenId);
+            if (stAmount != 0) {
+                revert InvalidBToken();
+            }
         }
     }
 
