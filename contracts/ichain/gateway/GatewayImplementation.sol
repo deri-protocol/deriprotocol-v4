@@ -831,9 +831,15 @@ contract GatewayImplementation is GatewayStorage {
         _dTokenStates[data.dTokenId].set(D_LASTCUMULATIVEPNLONENGINE, data.lastCumulativePnlOnEngine);
     }
 
-    function _checkRequestId(uint256 dTokenId, uint256 requestId) internal view {
+    // @notice Check callback's requestId is the same as the current requestId stored
+    // If a new request is submitted before the callback for last request, requestId will not match,
+    // and this callback cannot be executed anymore
+    function _checkRequestId(uint256 dTokenId, uint256 requestId) internal {
         if (_dTokenStates[dTokenId].getUint(D_REQUESTID) != requestId) {
             revert InvalidRequestId();
+        } else {
+            // increment requestId so that callback can only be executed once
+            _dTokenStates[dTokenId].set(D_REQUESTID, requestId + 1);
         }
     }
 
