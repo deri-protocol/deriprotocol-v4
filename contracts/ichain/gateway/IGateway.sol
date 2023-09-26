@@ -9,6 +9,7 @@ interface IGateway {
         address pToken;
         address oracle;
         address swapper;
+        address vault0;
         address iou;
         address tokenB0;
         address dChainEventSigner;

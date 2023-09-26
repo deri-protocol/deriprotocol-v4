@@ -208,6 +208,7 @@ contract GatewayImplementation is GatewayStorage {
         p.pToken = address(pToken);
         p.oracle = address(oracle);
         p.swapper = address(swapper);
+        p.vault0 = address(vault0);
         p.iou = address(iou);
         p.tokenB0 = tokenB0;
         p.dChainEventSigner = dChainEventSigner;
@@ -603,7 +604,7 @@ contract GatewayImplementation is GatewayStorage {
         uint256 bAmount,
         bytes32 symbolId,
         int256[] calldata tradeParams
-    ) external {
+    ) external payable {
         _checkPTokenIdOwner(pTokenId, msg.sender);
 
         _receiveExecutionFee(_executionFees[ACTION_REQUESTTRADEANDREMOVEMARGIN]);
