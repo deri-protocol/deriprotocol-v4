@@ -311,9 +311,10 @@ contract EngineImplementation is EngineStorage {
 
         data.cumulativePnl = data.cumulativePnl.minusUnchecked(s.traderFunding);
 
-        int256 realizedPnl = data.cumulativePnl.minusUnchecked(v.lastCumulativePnlOnEngine);
-        int256 requiredRealMoneyMargin = SafeMath.max(s.traderInitialMarginRequired - s.traderPnl, int256(0));
+        int256 requiredRealMoneyMargin;
         if (s.traderInitialMarginRequired > 0) {
+            int256 realizedPnl = data.cumulativePnl.minusUnchecked(v.lastCumulativePnlOnEngine);
+            requiredRealMoneyMargin = SafeMath.max(s.traderInitialMarginRequired - s.traderPnl, int256(0));
             if (v.realMoneyMargin.utoi() + realizedPnl < requiredRealMoneyMargin) {
                 revert InsufficientMargin();
             }
@@ -350,9 +351,9 @@ contract EngineImplementation is EngineStorage {
         data.cumulativePnl = data.cumulativePnl.minusUnchecked(s.traderFunding + s.tradeFee + s.tradeRealizedCost);
 
         if (s.traderInitialMarginRequired > 0) {
-            int256 pnl = data.cumulativePnl.minusUnchecked(v.lastCumulativePnlOnEngine);
-            int256 requiredMargin = s.traderInitialMarginRequired - s.traderPnl;
-            if (v.realMoneyMargin.utoi() + pnl < requiredMargin) {
+            int256 realizedPnl = data.cumulativePnl.minusUnchecked(v.lastCumulativePnlOnEngine);
+            int256 requiredRealMoneyMargin = s.traderInitialMarginRequired - s.traderPnl;
+            if (v.realMoneyMargin.utoi() + realizedPnl < requiredRealMoneyMargin) {
                 revert InsufficientMargin();
             }
         }
