@@ -169,7 +169,17 @@ contract EngineImplementation is EngineStorage {
     function tradeAndRemoveMargin(bytes memory eventData, bytes memory eventSig, IOracle.Signature[] memory signatures) external _reentryLock_ {
         _verifyEventData(eventData, eventSig);
         oracle.updateOffchainValues(signatures);
-        IEngine.VarOnTradeAndRemoveMargin memory v = abi.decode(eventData, (IEngine.VarOnTradeAndRemoveMargin));
+        IEngine.VarOnTradeAndRemoveMargin memory v;
+        (
+            v.requestId,
+            v.pTokenId,
+            v.realMoneyMargin,
+            v.lastCumulativePnlOnEngine,
+            v.cumulativePnlOnGateway,
+            v.bAmount,
+            v.symbolId,
+            v.tradeParams
+        ) = abi.decode(eventData, (uint256, uint256, uint256, int256, int256, uint256, bytes32, int256[]));
         _updateRequestId(v.pTokenId, v.requestId);
         _tradeAndRemoveMargin(v);
     }
@@ -303,8 +313,10 @@ contract EngineImplementation is EngineStorage {
 
         int256 realizedPnl = data.cumulativePnl.minusUnchecked(v.lastCumulativePnlOnEngine);
         int256 requiredRealMoneyMargin = SafeMath.max(s.traderInitialMarginRequired - s.traderPnl, int256(0));
-        if (v.realMoneyMargin.utoi() + realizedPnl < requiredRealMoneyMargin) {
-            revert InsufficientMargin();
+        if (s.traderInitialMarginRequired > 0) {
+            if (v.realMoneyMargin.utoi() + realizedPnl < requiredRealMoneyMargin) {
+                revert InsufficientMargin();
+            }
         }
 
         _saveData(data, v.pTokenId, false);
@@ -337,10 +349,12 @@ contract EngineImplementation is EngineStorage {
 
         data.cumulativePnl = data.cumulativePnl.minusUnchecked(s.traderFunding + s.tradeFee + s.tradeRealizedCost);
 
-        int256 pnl = data.cumulativePnl.minusUnchecked(v.lastCumulativePnlOnEngine);
-        int256 requiredMargin = s.traderInitialMarginRequired - s.traderPnl;
-        if (v.realMoneyMargin.utoi() + pnl < requiredMargin) {
-            revert InsufficientMargin();
+        if (s.traderInitialMarginRequired > 0) {
+            int256 pnl = data.cumulativePnl.minusUnchecked(v.lastCumulativePnlOnEngine);
+            int256 requiredMargin = s.traderInitialMarginRequired - s.traderPnl;
+            if (v.realMoneyMargin.utoi() + pnl < requiredMargin) {
+                revert InsufficientMargin();
+            }
         }
 
         _saveData(data, v.pTokenId, false);
