@@ -356,6 +356,10 @@ contract EngineImplementation is EngineStorage {
             if (v.realMoneyMargin.utoi() + realizedPnl < requiredRealMoneyMargin) {
                 revert InsufficientMargin();
             }
+
+            if ((data.totalLiquidity + data.lpsPnl) * ONE < s.initialMarginRequired * initialMarginMultiplier) {
+                revert InsufficientLiquidity();
+            }
         }
 
         _saveData(data, v.pTokenId, false);
