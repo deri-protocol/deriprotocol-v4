@@ -56,6 +56,13 @@ library SafeMath {
         return a <= b ? a : b;
     }
 
+    function divRoundingUp(uint256 a, uint256 b) internal pure returns (uint256 c) {
+        c = a / b;
+        if (b * c != a) {
+            c += 1;
+        }
+    }
+
     // @notice Rescale a uint256 value from a base of 10^decimals1 to 10^decimals2
     function rescale(uint256 value, uint256 decimals1, uint256 decimals2) internal pure returns (uint256) {
         return decimals1 == decimals2 ? value : value * 10**decimals2 / 10**decimals1;

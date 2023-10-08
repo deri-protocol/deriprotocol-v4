@@ -22,6 +22,7 @@ contract VaultImplementationVenus is VaultStorage {
 
     error OnlyGateway();
     error NotMarket();
+    error InvalidMarket();
     error InvalidAsset();
     error EnterMarketError();
     error ExitMarketError();
@@ -53,6 +54,12 @@ contract VaultImplementationVenus is VaultStorage {
     ) {
         if (!IVenusMarket(market_).isVToken()) {
             revert NotMarket();
+        }
+        if (
+            asset_ == assetETH &&
+            keccak256(abi.encodePacked(IVenusMarket(market_).symbol())) != keccak256('vBNB')
+        ) {
+            revert InvalidMarket();
         }
         if (asset_ != assetETH && IVenusMarket(market_).underlying() != asset_) {
             revert InvalidAsset();
@@ -170,7 +177,9 @@ contract VaultImplementationVenus is VaultStorage {
         uint256 a2 = asset.balanceOfThis();
 
         // Calculate the staked tokens burned ('burnedSt') based on the change in market balances and staked amount ratios
-        uint256 burnedSt = (m1 - m2) * stTotal / m1;
+        uint256 burnedSt = SafeMath.min(
+            ((m1 - m2) * stTotal).divRoundingUp(m1), stAmount
+        );
 
         // Update the staked amount for 'dTokenId' and the total staked amount
         stAmounts[dTokenId] -= burnedSt;

@@ -135,7 +135,7 @@ contract GatewayImplementation is GatewayStorage {
 
     uint8 constant B_VAULT             = 1; // BToken vault address
     uint8 constant B_ORACLEID          = 2; // BToken oracle id
-    uint8 constant B_COLLECTERALFACTOR = 3; // BToken collateral factor
+    uint8 constant B_COLLATERALFACTOR  = 3; // BToken collateral factor
 
     uint8 constant D_REQUESTID                      = 1; // Lp/Trader request id
     uint8 constant D_BTOKEN                         = 2; // Lp/Trader bToken
@@ -228,7 +228,7 @@ contract GatewayImplementation is GatewayStorage {
     function getBTokenState(address bToken) external view returns (IGateway.BTokenState memory s) {
         s.vault = _bTokenStates[bToken].getAddress(B_VAULT);
         s.oracleId = _bTokenStates[bToken].getBytes32(B_ORACLEID);
-        s.collateralFactor = _bTokenStates[bToken].getUint(B_COLLECTERALFACTOR);
+        s.collateralFactor = _bTokenStates[bToken].getUint(B_COLLATERALFACTOR);
     }
 
     function getLpState(uint256 lTokenId) external view returns (IGateway.LpState memory s) {
@@ -317,7 +317,7 @@ contract GatewayImplementation is GatewayStorage {
         }
         _bTokenStates[bToken].set(B_VAULT, vault);
         _bTokenStates[bToken].set(B_ORACLEID, oracleId);
-        _bTokenStates[bToken].set(B_COLLECTERALFACTOR, collateralFactor);
+        _bTokenStates[bToken].set(B_COLLATERALFACTOR, collateralFactor);
 
         emit AddBToken(bToken, vault, oracleId, collateralFactor);
     }
@@ -330,7 +330,7 @@ contract GatewayImplementation is GatewayStorage {
 
         _bTokenStates[bToken].del(B_VAULT);
         _bTokenStates[bToken].del(B_ORACLEID);
-        _bTokenStates[bToken].del(B_COLLECTERALFACTOR);
+        _bTokenStates[bToken].del(B_COLLATERALFACTOR);
 
         emit DelBToken(bToken);
     }
@@ -898,7 +898,7 @@ contract GatewayImplementation is GatewayStorage {
     }
 
     function _getExParams(Data memory data) internal view {
-        data.collateralFactor = _bTokenStates[data.bToken].getUint(B_COLLECTERALFACTOR);
+        data.collateralFactor = _bTokenStates[data.bToken].getUint(B_COLLATERALFACTOR);
         data.bPrice = _getBPrice(data.bToken);
     }
 

@@ -16,6 +16,7 @@ contract VaultImplementationNone is VaultStorage {
     using SafeMath for uint256;
 
     error OnlyGateway();
+    error TinyShareOfInitDeposit();
 
     uint256 constant UONE = 1e18;
     address constant assetETH = address(1);
@@ -61,6 +62,9 @@ contract VaultImplementationNone is VaultStorage {
         uint256 stTotal = stTotalAmount;
         if (stTotal == 0) {
             mintedSt = amount.rescale(asset.decimals(), 18);
+            if (mintedSt < 1e9) { // prevent an initial tiny share amount to affect later deposits
+                revert TinyShareOfInitDeposit();
+            }
         } else {
             uint256 amountTotal = asset.balanceOfThis();
             mintedSt = stTotal * amount / (amountTotal - amount);
@@ -87,7 +91,9 @@ contract VaultImplementationNone is VaultStorage {
         redeemedAmount = SafeMath.min(amount, available);
 
         // Calculate the staked tokens burned ('burnedSt') based on changes in the total asset balance
-        uint256 burnedSt = stTotal * redeemedAmount / amountTotal;
+        uint256 burnedSt = SafeMath.min(
+            (stTotal * redeemedAmount).divRoundingUp(amountTotal), stAmount
+        );
 
         // Update the staked amount for 'dTokenId' and the total staked amount
         stAmounts[dTokenId] -= burnedSt;

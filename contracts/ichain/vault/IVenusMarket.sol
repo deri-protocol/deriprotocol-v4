@@ -6,6 +6,8 @@ interface IVenusMarket {
 
     function isVToken() external view returns (bool);
 
+    function symbol() external view returns (string memory);
+
     function underlying() external view returns (address);
 
     function exchangeRateStored() external view returns (uint256);

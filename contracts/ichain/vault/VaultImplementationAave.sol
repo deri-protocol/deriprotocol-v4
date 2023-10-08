@@ -153,7 +153,9 @@ contract VaultImplementationAave is VaultStorage {
         }
 
         // Calculate the staked tokens burned ('burnedSt') based on changes in the total asset balance
-        uint256 burnedSt = stTotal * amount / amountTotal;
+        uint256 burnedSt = SafeMath.min(
+            (stTotal * amount).divRoundingUp(amountTotal), stAmount
+        );
 
         // Update the staked amount for 'dTokenId' and the total staked amount
         stAmounts[dTokenId] -= burnedSt;
