@@ -604,7 +604,7 @@ library Option {
             } else {
                 data.delta -= ONE;
             }
-        } else if (data.intrinsicValue == 0) {
+        } else if (indexPrice == data.strikePrice) {
             if (data.isCall) {
                 data.delta = ONE / 2;
             } else {
