@@ -466,7 +466,9 @@ contract GatewayImplementation is GatewayStorage {
         Data memory data = _getData(msg.sender, pTokenId, bToken);
 
         if (bToken == tokenETH) {
-            bAmount = msg.value;
+            if (bAmount > msg.value) {
+                revert InvalidBAmount();
+            }
         }
         if (bAmount == 0) {
             revert InvalidBAmount();
@@ -586,6 +588,10 @@ contract GatewayImplementation is GatewayStorage {
         int256[] calldata tradeParams,
         bool singlePosition
     ) external payable {
+        uint256 ethAmount = _receiveExecutionFee(_executionFees[ACTION_REQUESTTRADE]);
+        if (bToken == tokenETH && bAmount > ethAmount) {
+            revert InvalidBAmount();
+        }
         pTokenId = requestAddMargin(pTokenId, bToken, bAmount, singlePosition);
         requestTrade(pTokenId, symbolId, tradeParams);
     }
