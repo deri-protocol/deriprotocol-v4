@@ -153,11 +153,11 @@ contract VaultImplementationVenus is VaultStorage {
 
         uint256 stAmount = stAmounts[dTokenId];
         uint256 stTotal = stTotalAmount;
+        uint256 mAmount = m1 * stAmount / stTotal;
 
         {
             // Calculate the market token amount ('mAmount') and available assets ('available') for redemption
             uint256 exRate = IVenusMarket(market).exchangeRateStored();
-            uint256 mAmount = m1 * stAmount / stTotal;
             uint256 available = exRate * mAmount / UONE;
 
             uint256 error;
@@ -177,9 +177,9 @@ contract VaultImplementationVenus is VaultStorage {
         uint256 a2 = asset.balanceOfThis();
 
         // Calculate the staked tokens burned ('burnedSt') based on the change in market balances and staked amount ratios
-        uint256 burnedSt = SafeMath.min(
-            ((m1 - m2) * stTotal).divRoundingUp(m1), stAmount
-        );
+        uint256 burnedSt = m1 - m2 == mAmount
+            ? stAmount
+            : ((m1 - m2) * stTotal).divRoundingUp(m1);
 
         // Update the staked amount for 'dTokenId' and the total staked amount
         stAmounts[dTokenId] -= burnedSt;

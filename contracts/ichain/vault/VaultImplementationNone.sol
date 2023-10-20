@@ -91,9 +91,9 @@ contract VaultImplementationNone is VaultStorage {
         redeemedAmount = SafeMath.min(amount, available);
 
         // Calculate the staked tokens burned ('burnedSt') based on changes in the total asset balance
-        uint256 burnedSt = SafeMath.min(
-            (stTotal * redeemedAmount).divRoundingUp(amountTotal), stAmount
-        );
+        uint256 burnedSt = redeemedAmount == available
+            ? stAmount
+            : (stTotal * redeemedAmount).divRoundingUp(amountTotal);
 
         // Update the staked amount for 'dTokenId' and the total staked amount
         stAmounts[dTokenId] -= burnedSt;
