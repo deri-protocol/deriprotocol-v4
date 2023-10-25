@@ -101,6 +101,7 @@ contract EngineImplementation is EngineStorage {
 
     function getChainState(uint88 chainId) external view returns (IEngine.ChainState memory s) {
         s.lastCumulativePnlOnGateway = _iStates[chainId].getInt(I_LASTCUMULATIVEPNLONGATEWAY);
+        s.lastGatewayRequestId = _iStates[chainId].getUint(I_LASTGATEWAYREQUESTID);
     }
 
     function getLpState(uint256 lTokenId) external view returns (IEngine.LpState memory s) {

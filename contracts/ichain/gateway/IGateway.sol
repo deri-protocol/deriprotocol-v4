@@ -24,6 +24,7 @@ interface IGateway {
         uint256 liquidityTime;
         uint256 totalLiquidity;
         int256  cumulativeTimePerLiquidity;
+        uint256 gatewayRequestId;
     }
 
     struct BTokenState {

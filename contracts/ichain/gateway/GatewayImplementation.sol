@@ -224,6 +224,7 @@ contract GatewayImplementation is GatewayStorage {
         s.liquidityTime = _gatewayStates.getUint(S_LIQUIDITYTIME);
         s.totalLiquidity = _gatewayStates.getUint(S_TOTALLIQUIDITY);
         s.cumulativeTimePerLiquidity = _gatewayStates.getInt(S_CUMULATIVETIMEPERLIQUIDITY);
+        s.gatewayRequestId = _gatewayStates.getUint(S_GATEWAYREQUESTID);
     }
 
     function getBTokenState(address bToken) external view returns (IGateway.BTokenState memory s) {
