@@ -53,6 +53,7 @@ contract EngineImplementation is EngineStorage {
     uint8 constant S_PROTOCOLFEE               = 4; // total protocol fee collected
 
     uint8 constant I_LASTCUMULATIVEPNLONGATEWAY = 1; // last cumulative pnl on specific i-chain gateway
+    uint8 constant I_LASTGATEWAYREQUESTID       = 2; // last gateway request id on specific i-chain gateway
 
     uint8 constant D_REQUESTID                 = 1; // Lp/Trader request id
     uint8 constant D_CUMULATIVEPNL             = 2; // Lp/Trader cumulative pnl
@@ -123,7 +124,7 @@ contract EngineImplementation is EngineStorage {
         _verifyEventData(eventData, eventSig);
         oracle.updateOffchainValues(signatures);
         IEngine.VarOnUpdateLiquidity memory v = abi.decode(eventData, (IEngine.VarOnUpdateLiquidity));
-        _updateRequestId(v.lTokenId, v.requestId);
+        _updateUserRequestId(v.lTokenId, v.requestId);
         uint256 curLiquidity = _dStates[v.lTokenId].getInt(D_LIQUIDITY).itou();
         // Depends on liquidity change, call addLiquidity or removeLiquidity logic
         if (v.liquidity > curLiquidity) {
@@ -137,7 +138,7 @@ contract EngineImplementation is EngineStorage {
         _verifyEventData(eventData, eventSig);
         oracle.updateOffchainValues(signatures);
         IEngine.VarOnRemoveMargin memory v = abi.decode(eventData, (IEngine.VarOnRemoveMargin));
-        _updateRequestId(v.pTokenId, v.requestId);
+        _updateUserRequestId(v.pTokenId, v.requestId);
         _removeMargin(v);
     }
 
@@ -154,7 +155,7 @@ contract EngineImplementation is EngineStorage {
             v.symbolId,
             v.tradeParams
         ) = abi.decode(eventData, (uint256, uint256, uint256, int256, int256, bytes32, int256[]));
-        _updateRequestId(v.pTokenId, v.requestId);
+        _updateUserRequestId(v.pTokenId, v.requestId);
         _trade(v);
     }
 
@@ -162,7 +163,7 @@ contract EngineImplementation is EngineStorage {
         _verifyEventData(eventData, eventSig);
         oracle.updateOffchainValues(signatures);
         IEngine.VarOnLiquidate memory v = abi.decode(eventData, (IEngine.VarOnLiquidate));
-        _updateRequestId(v.pTokenId, v.requestId);
+        _updateUserRequestId(v.pTokenId, v.requestId);
         _liquidate(v);
     }
 
@@ -180,7 +181,7 @@ contract EngineImplementation is EngineStorage {
             v.symbolId,
             v.tradeParams
         ) = abi.decode(eventData, (uint256, uint256, uint256, int256, int256, uint256, bytes32, int256[]));
-        _updateRequestId(v.pTokenId, v.requestId);
+        _updateUserRequestId(v.pTokenId, v.requestId);
         _tradeAndRemoveMargin(v);
     }
 
@@ -240,7 +241,9 @@ contract EngineImplementation is EngineStorage {
             ISymbolManager.SettlementOnAddLiquidity memory s =
                 symbolManager.settleSymbolsOnAddLiquidity(data.totalLiquidity + data.lpsPnl);
 
-            int256 undistributedPnl = s.funding - s.diffTradersPnl + _updateCumulativePnlOnGateway(v.lTokenId, v.cumulativePnlOnGateway);
+            int256 undistributedPnl = s.funding - s.diffTradersPnl + _updateCumulativePnlOnGateway(
+                v.requestId, v.lTokenId, v.cumulativePnlOnGateway
+            );
             _settleUndistributedPnl(data, undistributedPnl);
         }
 
@@ -272,7 +275,7 @@ contract EngineImplementation is EngineStorage {
             symbolManager.settleSymbolsOnRemoveLiquidity(data.totalLiquidity + data.lpsPnl, removedLiquidity);
 
         int256 undistributedPnl = s.funding - s.diffTradersPnl + s.removeLiquidityPenalty
-                                + _updateCumulativePnlOnGateway(v.lTokenId, v.cumulativePnlOnGateway);
+                                + _updateCumulativePnlOnGateway(v.requestId, v.lTokenId, v.cumulativePnlOnGateway);
         _settleUndistributedPnl(data, undistributedPnl);
 
         data.cumulativePnl = data.cumulativePnl.minusUnchecked(s.removeLiquidityPenalty);
@@ -306,7 +309,9 @@ contract EngineImplementation is EngineStorage {
         ISymbolManager.SettlementOnRemoveMargin memory s =
             symbolManager.settleSymbolsOnRemoveMargin(v.pTokenId, data.totalLiquidity + data.lpsPnl);
 
-        int256 undistributedPnl = s.funding - s.diffTradersPnl + _updateCumulativePnlOnGateway(v.pTokenId, v.cumulativePnlOnGateway);
+        int256 undistributedPnl = s.funding - s.diffTradersPnl + _updateCumulativePnlOnGateway(
+            v.requestId, v.pTokenId, v.cumulativePnlOnGateway
+        );
         _settleUndistributedPnl(data, undistributedPnl);
 
         data.cumulativePnl = data.cumulativePnl.minusUnchecked(s.traderFunding);
@@ -345,7 +350,7 @@ contract EngineImplementation is EngineStorage {
         _states.set(S_PROTOCOLFEE, _states.getInt(S_PROTOCOLFEE) + collect);
 
         int256 undistributedPnl = s.funding - s.diffTradersPnl + s.tradeFee - collect + s.tradeRealizedCost
-                                + _updateCumulativePnlOnGateway(v.pTokenId, v.cumulativePnlOnGateway);
+                                + _updateCumulativePnlOnGateway(v.requestId, v.pTokenId, v.cumulativePnlOnGateway);
         _settleUndistributedPnl(data, undistributedPnl);
 
         data.cumulativePnl = data.cumulativePnl.minusUnchecked(s.traderFunding + s.tradeFee + s.tradeRealizedCost);
@@ -373,7 +378,7 @@ contract EngineImplementation is EngineStorage {
         );
 
         int256 undistributedPnl = s.funding - s.diffTradersPnl + s.tradeRealizedCost
-                                + _updateCumulativePnlOnGateway(v.pTokenId, v.cumulativePnlOnGateway);
+                                + _updateCumulativePnlOnGateway(v.requestId, v.pTokenId, v.cumulativePnlOnGateway);
         _settleUndistributedPnl(data, undistributedPnl);
 
         if (s.traderMaintenanceMarginRequired <= 0) {
@@ -501,24 +506,33 @@ contract EngineImplementation is EngineStorage {
         _dStates[dTokenId].set(D_CUMULATIVEPNL, data.cumulativePnl);
     }
 
-    function _updateRequestId(uint256 dTokenId, uint256 requestId) internal {
-        uint256 lastRequestId = _dStates[dTokenId].getUint(D_REQUESTID);
-        if (requestId <= lastRequestId) {
+    function _updateUserRequestId(uint256 dTokenId, uint256 requestId) internal {
+        uint128 userRequestId = uint128(requestId);
+        uint128 lastUserRequestId = uint128(_dStates[dTokenId].getUint(D_REQUESTID));
+        if (userRequestId <= lastUserRequestId) {
             revert InvalidRequestId();
         }
-        _dStates[dTokenId].set(D_REQUESTID, requestId);
+        _dStates[dTokenId].set(D_REQUESTID, uint256(userRequestId));
     }
 
     function _getChainIdFromDTokenId(uint256 dTokenId) internal pure returns (uint88) {
         return uint88(dTokenId >> 160);
     }
 
-    function _updateCumulativePnlOnGateway(uint256 dTokenId, int256 cumulativePnlOnGateway) internal returns (int256 undistributedPnl) {
+    function _updateCumulativePnlOnGateway(uint256 requestId, uint256 dTokenId, int256 cumulativePnlOnGateway)
+    internal returns (int256 undistributedPnl)
+    {
         uint88 chainId = _getChainIdFromDTokenId(dTokenId);
-        int256 lastCumulativePnlOnGateway = _iStates[chainId].getInt(I_LASTCUMULATIVEPNLONGATEWAY);
-        if (lastCumulativePnlOnGateway != cumulativePnlOnGateway) {
-            undistributedPnl = cumulativePnlOnGateway.minusUnchecked(lastCumulativePnlOnGateway);
-            _iStates[chainId].set(I_LASTCUMULATIVEPNLONGATEWAY, cumulativePnlOnGateway);
+        uint256 gatewayRequestId = requestId >> 128;
+        uint256 lastGatewayRequestId = _iStates[chainId].getUint(I_LASTGATEWAYREQUESTID);
+        if (gatewayRequestId > lastGatewayRequestId) {
+            _iStates[chainId].set(I_LASTGATEWAYREQUESTID, gatewayRequestId);
+
+            int256 lastCumulativePnlOnGateway = _iStates[chainId].getInt(I_LASTCUMULATIVEPNLONGATEWAY);
+            if (lastCumulativePnlOnGateway != cumulativePnlOnGateway) {
+                undistributedPnl = cumulativePnlOnGateway.minusUnchecked(lastCumulativePnlOnGateway);
+                _iStates[chainId].set(I_LASTCUMULATIVEPNLONGATEWAY, cumulativePnlOnGateway);
+            }
         }
     }
 

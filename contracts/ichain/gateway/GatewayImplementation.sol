@@ -132,6 +132,7 @@ contract GatewayImplementation is GatewayStorage {
     uint8 constant S_LIQUIDITYTIME              = 2; // Last timestamp when liquidity updated
     uint8 constant S_TOTALLIQUIDITY             = 3; // Total liquidity on d-chain
     uint8 constant S_CUMULATIVETIMEPERLIQUIDITY = 4; // Cumulavie time per liquidity
+    uint8 constant S_GATEWAYREQUESTID           = 5; // Gateway request id
 
     uint8 constant B_VAULT             = 1; // BToken vault address
     uint8 constant B_ORACLEID          = 2; // BToken oracle id
@@ -837,21 +838,34 @@ contract GatewayImplementation is GatewayStorage {
         _dTokenStates[data.dTokenId].set(D_LASTCUMULATIVEPNLONENGINE, data.lastCumulativePnlOnEngine);
     }
 
-    // @notice Check callback's requestId is the same as the current requestId stored
+    // @notice Check callback's requestId is the same as the current requestId stored for user
     // If a new request is submitted before the callback for last request, requestId will not match,
     // and this callback cannot be executed anymore
     function _checkRequestId(uint256 dTokenId, uint256 requestId) internal {
-        if (_dTokenStates[dTokenId].getUint(D_REQUESTID) != requestId) {
+        uint128 userRequestId = uint128(requestId);
+        if (_dTokenStates[dTokenId].getUint(D_REQUESTID) != uint256(userRequestId)) {
             revert InvalidRequestId();
         } else {
             // increment requestId so that callback can only be executed once
-            _dTokenStates[dTokenId].set(D_REQUESTID, requestId + 1);
+            _dTokenStates[dTokenId].set(D_REQUESTID, uint256(userRequestId + 1));
         }
     }
 
+    // @notice Increment gateway requestId and user requestId
+    // and returns the combined requestId for this request
+    // The combined requestId contains 2 parts:
+    //   * Lower 128 bits stores user's requestId, only increments when request is from this user
+    //   * Higher 128 bits stores gateways's requestId, increments for all new requests in this contract
     function _incrementRequestId(uint256 dTokenId) internal returns (uint256) {
-        uint256 requestId = _dTokenStates[dTokenId].getUint(D_REQUESTID) + 1;
-        _dTokenStates[dTokenId].set(D_REQUESTID, requestId);
+        uint128 gatewayRequestId = uint128(_gatewayStates.getUint(S_GATEWAYREQUESTID));
+        gatewayRequestId += 1;
+        _gatewayStates.set(S_GATEWAYREQUESTID, uint256(gatewayRequestId));
+
+        uint128 userRequestId = uint128(_dTokenStates[dTokenId].getUint(D_REQUESTID));
+        userRequestId += 1;
+        _dTokenStates[dTokenId].set(D_REQUESTID, uint256(userRequestId));
+
+        uint256 requestId = (uint256(gatewayRequestId) << 128) + uint256(userRequestId);
         return requestId;
     }
 
