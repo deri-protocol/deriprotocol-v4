@@ -85,6 +85,8 @@ contract VaultImplementationNone is VaultStorage {
         uint256 stAmount = stAmounts[dTokenId];
         uint256 stTotal = stTotalAmount;
 
+        if (stAmount == 0) return 0;
+
         // Calculate the available assets ('available') for redemption based on staked amount ratios
         uint256 amountTotal = asset.balanceOfThis();
         uint256 available = amountTotal * stAmount / stTotal;

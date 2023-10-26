@@ -153,6 +153,9 @@ contract VaultImplementationVenus is VaultStorage {
 
         uint256 stAmount = stAmounts[dTokenId];
         uint256 stTotal = stTotalAmount;
+
+        if (stAmount == 0) return 0;
+
         uint256 mAmount = m1 * stAmount / stTotal;
 
         {
