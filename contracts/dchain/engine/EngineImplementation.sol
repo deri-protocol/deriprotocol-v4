@@ -382,10 +382,6 @@ contract EngineImplementation is EngineStorage {
                                 + _updateCumulativePnlOnGateway(v.requestId, v.pTokenId, v.cumulativePnlOnGateway);
         _settleUndistributedPnl(data, undistributedPnl);
 
-        if (s.traderMaintenanceMarginRequired <= 0) {
-            revert NoMaintenanceMarginRequired();
-        }
-
         data.cumulativePnl = data.cumulativePnl.minusUnchecked(s.traderFunding);
 
         int256 availableMargin = v.realMoneyMargin.utoi() + data.cumulativePnl.minusUnchecked(v.lastCumulativePnlOnEngine);

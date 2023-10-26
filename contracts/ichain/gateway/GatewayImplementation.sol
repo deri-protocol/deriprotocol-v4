@@ -925,10 +925,11 @@ contract GatewayImplementation is GatewayStorage {
 
     // @notice Calculate the liquidity (in 18 decimals) associated with current dTokenId
     function _getDTokenLiquidity(Data memory data) internal view returns (uint256 liquidity) {
-        uint256 liquidityInB0 = (
-            IVault(data.vault).getBalance(data.dTokenId) * data.bPrice / UONE * data.collateralFactor / UONE
-        ).add(data.b0Amount);
-        return liquidityInB0.rescale(decimalsB0, 18);
+        uint256 b0AmountInVault = IVault(data.vault).getBalance(data.dTokenId) * data.bPrice / UONE * data.collateralFactor / UONE;
+        uint256 b0Shortage = data.b0Amount >= 0 ? 0 : (-data.b0Amount).itou();
+        if (b0AmountInVault >= b0Shortage) {
+            liquidity = b0AmountInVault.add(data.b0Amount).rescale(decimalsB0, 18);
+        }
     }
 
     // @notice Calculate the liquidity (in 18 decimals) associated with current dTokenId if `bAmount` in bToken is removed
