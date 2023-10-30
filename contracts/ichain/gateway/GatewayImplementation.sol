@@ -132,6 +132,7 @@ contract GatewayImplementation is GatewayStorage {
     uint8 constant S_LIQUIDITYTIME              = 2; // Last timestamp when liquidity updated
     uint8 constant S_TOTALLIQUIDITY             = 3; // Total liquidity on d-chain
     uint8 constant S_CUMULATIVETIMEPERLIQUIDITY = 4; // Cumulavie time per liquidity
+    uint8 constant S_GATEWAYREQUESTID           = 5; // Gateway request id
 
     uint8 constant B_VAULT             = 1; // BToken vault address
     uint8 constant B_ORACLEID          = 2; // BToken oracle id
@@ -223,6 +224,7 @@ contract GatewayImplementation is GatewayStorage {
         s.liquidityTime = _gatewayStates.getUint(S_LIQUIDITYTIME);
         s.totalLiquidity = _gatewayStates.getUint(S_TOTALLIQUIDITY);
         s.cumulativeTimePerLiquidity = _gatewayStates.getInt(S_CUMULATIVETIMEPERLIQUIDITY);
+        s.gatewayRequestId = _gatewayStates.getUint(S_GATEWAYREQUESTID);
     }
 
     function getBTokenState(address bToken) external view returns (IGateway.BTokenState memory s) {
@@ -466,7 +468,9 @@ contract GatewayImplementation is GatewayStorage {
         Data memory data = _getData(msg.sender, pTokenId, bToken);
 
         if (bToken == tokenETH) {
-            bAmount = msg.value;
+            if (bAmount > msg.value) {
+                revert InvalidBAmount();
+            }
         }
         if (bAmount == 0) {
             revert InvalidBAmount();
@@ -586,6 +590,10 @@ contract GatewayImplementation is GatewayStorage {
         int256[] calldata tradeParams,
         bool singlePosition
     ) external payable {
+        uint256 ethAmount = _receiveExecutionFee(_executionFees[ACTION_REQUESTTRADE]);
+        if (bToken == tokenETH && bAmount > ethAmount) {
+            revert InvalidBAmount();
+        }
         pTokenId = requestAddMargin(pTokenId, bToken, bAmount, singlePosition);
         requestTrade(pTokenId, symbolId, tradeParams);
     }
@@ -831,21 +839,34 @@ contract GatewayImplementation is GatewayStorage {
         _dTokenStates[data.dTokenId].set(D_LASTCUMULATIVEPNLONENGINE, data.lastCumulativePnlOnEngine);
     }
 
-    // @notice Check callback's requestId is the same as the current requestId stored
+    // @notice Check callback's requestId is the same as the current requestId stored for user
     // If a new request is submitted before the callback for last request, requestId will not match,
     // and this callback cannot be executed anymore
     function _checkRequestId(uint256 dTokenId, uint256 requestId) internal {
-        if (_dTokenStates[dTokenId].getUint(D_REQUESTID) != requestId) {
+        uint128 userRequestId = uint128(requestId);
+        if (_dTokenStates[dTokenId].getUint(D_REQUESTID) != uint256(userRequestId)) {
             revert InvalidRequestId();
         } else {
             // increment requestId so that callback can only be executed once
-            _dTokenStates[dTokenId].set(D_REQUESTID, requestId + 1);
+            _dTokenStates[dTokenId].set(D_REQUESTID, uint256(userRequestId + 1));
         }
     }
 
+    // @notice Increment gateway requestId and user requestId
+    // and returns the combined requestId for this request
+    // The combined requestId contains 2 parts:
+    //   * Lower 128 bits stores user's requestId, only increments when request is from this user
+    //   * Higher 128 bits stores gateways's requestId, increments for all new requests in this contract
     function _incrementRequestId(uint256 dTokenId) internal returns (uint256) {
-        uint256 requestId = _dTokenStates[dTokenId].getUint(D_REQUESTID) + 1;
-        _dTokenStates[dTokenId].set(D_REQUESTID, requestId);
+        uint128 gatewayRequestId = uint128(_gatewayStates.getUint(S_GATEWAYREQUESTID));
+        gatewayRequestId += 1;
+        _gatewayStates.set(S_GATEWAYREQUESTID, uint256(gatewayRequestId));
+
+        uint128 userRequestId = uint128(_dTokenStates[dTokenId].getUint(D_REQUESTID));
+        userRequestId += 1;
+        _dTokenStates[dTokenId].set(D_REQUESTID, uint256(userRequestId));
+
+        uint256 requestId = (uint256(gatewayRequestId) << 128) + uint256(userRequestId);
         return requestId;
     }
 
@@ -904,10 +925,11 @@ contract GatewayImplementation is GatewayStorage {
 
     // @notice Calculate the liquidity (in 18 decimals) associated with current dTokenId
     function _getDTokenLiquidity(Data memory data) internal view returns (uint256 liquidity) {
-        uint256 liquidityInB0 = (
-            IVault(data.vault).getBalance(data.dTokenId) * data.bPrice / UONE * data.collateralFactor / UONE
-        ).add(data.b0Amount);
-        return liquidityInB0.rescale(decimalsB0, 18);
+        uint256 b0AmountInVault = IVault(data.vault).getBalance(data.dTokenId) * data.bPrice / UONE * data.collateralFactor / UONE;
+        uint256 b0Shortage = data.b0Amount >= 0 ? 0 : (-data.b0Amount).itou();
+        if (b0AmountInVault >= b0Shortage) {
+            liquidity = b0AmountInVault.add(data.b0Amount).rescale(decimalsB0, 18);
+        }
     }
 
     // @notice Calculate the liquidity (in 18 decimals) associated with current dTokenId if `bAmount` in bToken is removed

@@ -20,6 +20,7 @@ interface IEngine {
 
     struct ChainState {
         int256 lastCumulativePnlOnGateway;
+        uint256 lastGatewayRequestId;
     }
 
     struct LpState {

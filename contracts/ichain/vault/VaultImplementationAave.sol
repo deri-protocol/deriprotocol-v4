@@ -136,6 +136,8 @@ contract VaultImplementationAave is VaultStorage {
         uint256 stAmount = stAmounts[dTokenId];
         uint256 stTotal = stTotalAmount;
 
+        if (stAmount == 0) return 0;
+
         // Calculate the available assets ('available') for redemption based on staked amount ratios
         uint256 amountTotal = market.balanceOfThis();
         uint256 available = amountTotal * stAmount / stTotal;
@@ -153,9 +155,9 @@ contract VaultImplementationAave is VaultStorage {
         }
 
         // Calculate the staked tokens burned ('burnedSt') based on changes in the total asset balance
-        uint256 burnedSt = SafeMath.min(
-            (stTotal * amount).divRoundingUp(amountTotal), stAmount
-        );
+        uint256 burnedSt = amount == available
+            ? stAmount
+            : (stTotal * amount).divRoundingUp(amountTotal);
 
         // Update the staked amount for 'dTokenId' and the total staked amount
         stAmounts[dTokenId] -= burnedSt;
