@@ -276,7 +276,8 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
         int256 diffInitialMarginRequired;
         uint256 length = _tdSymbolIds[pTokenId].length();
 
-        for (uint256 i = 0; i < length; i++) {
+        // Pop EnumerableSet `_tdSymbolIds` backwards without messing up index during process
+        for (uint256 i = length - 1; i >= 0; i--) {
             bytes32 symbolId = _tdSymbolIds[pTokenId].at(i);
             ISymbol.SettlementOnLiquidate memory s = _settleOnLiquidate(
                 symbolId, pTokenId, liquidity
