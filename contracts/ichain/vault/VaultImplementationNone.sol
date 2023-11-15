@@ -92,6 +92,11 @@ contract VaultImplementationNone is VaultStorage {
         uint256 available = amountTotal * stAmount / stTotal;
         redeemedAmount = SafeMath.min(amount, available);
 
+        if (redeemedAmount < available && redeemedAmount * 10000 >= available * 9999) {
+            // prevent tiny share left over
+            redeemedAmount = available;
+        }
+
         // Calculate the staked tokens burned ('burnedSt') based on changes in the total asset balance
         uint256 burnedSt = redeemedAmount == available
             ? stAmount
