@@ -15,12 +15,13 @@ interface IEngine {
         int256 totalLiquidity;
         int256 lpsPnl;
         int256 cumulativePnlPerLiquidity;
-        int256 protocolFee;
+        uint256 protocolFee;
     }
 
     struct ChainState {
         int256 lastCumulativePnlOnGateway;
         uint256 lastGatewayRequestId;
+        uint256 protocolFee;
     }
 
     struct LpState {

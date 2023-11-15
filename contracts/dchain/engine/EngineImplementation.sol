@@ -54,6 +54,7 @@ contract EngineImplementation is EngineStorage {
 
     uint8 constant I_LASTCUMULATIVEPNLONGATEWAY = 1; // last cumulative pnl on specific i-chain gateway
     uint8 constant I_LASTGATEWAYREQUESTID       = 2; // last gateway request id on specific i-chain gateway
+    uint8 constant I_PROTOCOLFEE                = 3; // protocol fee collected for specific i-chain
 
     uint8 constant D_REQUESTID                 = 1; // Lp/Trader request id
     uint8 constant D_CUMULATIVEPNL             = 2; // Lp/Trader cumulative pnl
@@ -96,12 +97,13 @@ contract EngineImplementation is EngineStorage {
         s.totalLiquidity = _states.getInt(S_TOTALLIQUIDITY);
         s.lpsPnl = _states.getInt(S_LPSPNL);
         s.cumulativePnlPerLiquidity = _states.getInt(S_CUMULATIVEPNLPERLIQUIDITY);
-        s.protocolFee = _states.getInt(S_PROTOCOLFEE);
+        s.protocolFee = _states.getUint(S_PROTOCOLFEE);
     }
 
     function getChainState(uint88 chainId) external view returns (IEngine.ChainState memory s) {
         s.lastCumulativePnlOnGateway = _iStates[chainId].getInt(I_LASTCUMULATIVEPNLONGATEWAY);
         s.lastGatewayRequestId = _iStates[chainId].getUint(I_LASTGATEWAYREQUESTID);
+        s.protocolFee = _iStates[chainId].getUint(I_PROTOCOLFEE);
     }
 
     function getLpState(uint256 lTokenId) external view returns (IEngine.LpState memory s) {
@@ -347,8 +349,11 @@ contract EngineImplementation is EngineStorage {
             v.tradeParams
         );
 
+        // Collect protocol fee
         int256 collect = s.tradeFee * protocolFeeCollectRatio / ONE;
-        _states.set(S_PROTOCOLFEE, _states.getInt(S_PROTOCOLFEE) + collect);
+        uint88 chainId = _getChainIdFromDTokenId(v.pTokenId);
+        _states.set(S_PROTOCOLFEE, _states.getUint(S_PROTOCOLFEE) + collect.itou());
+        _iStates[chainId].set(I_PROTOCOLFEE, _iStates[chainId].getUint(I_PROTOCOLFEE) + collect.itou());
 
         int256 undistributedPnl = s.funding - s.diffTradersPnl + s.tradeFee - collect + s.tradeRealizedCost
                                 + _updateCumulativePnlOnGateway(v.requestId, v.pTokenId, v.cumulativePnlOnGateway);
