@@ -11,7 +11,7 @@ import './VaultStorage.sol';
  * @title Vault Implementation with NO external custodian
  * @dev This contract serves as a vault for managing deposits without any external custodian.
  */
-contract VaultImplementationNone is VaultStorage {
+contract VaultImplementationNoneCapped is VaultStorage {
 
     using ETHAndERC20 for address;
     using SafeMath for uint256;
