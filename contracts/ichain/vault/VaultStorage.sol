@@ -14,4 +14,6 @@ abstract contract VaultStorage is Admin, Implementation {
 
     uint256 public stTotalAmount;
 
+    uint256 public tradersTotalAssetAmount;
+
 }
