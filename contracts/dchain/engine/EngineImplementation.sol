@@ -130,7 +130,7 @@ contract EngineImplementation is EngineStorage {
         _updateUserRequestId(v.lTokenId, v.requestId);
         uint256 curLiquidity = _dStates[v.lTokenId].getInt(D_LIQUIDITY).itou();
         // Depends on liquidity change, call addLiquidity or removeLiquidity logic
-        if (v.liquidity > curLiquidity) {
+        if (v.liquidity >= curLiquidity) {
             _addLiquidity(v);
         } else if (v.liquidity < curLiquidity) {
             _removeLiquidity(v);
