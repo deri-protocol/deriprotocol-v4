@@ -76,4 +76,12 @@ interface IGateway {
         int256  cumulativePnlOnEngine;
     }
 
+    function getGatewayState() external view returns (GatewayState memory s);
+
+    function getBTokenState(address bToken) external view returns (BTokenState memory s);
+
+    function getLpState(uint256 lTokenId) external view returns (LpState memory s);
+
+    function getTdState(uint256 pTokenId) external view returns (TdState memory s);
+
 }
