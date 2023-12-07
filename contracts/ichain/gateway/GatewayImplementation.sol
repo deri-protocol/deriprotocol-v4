@@ -301,22 +301,31 @@ contract GatewayImplementation is GatewayStorage {
         if (IVault(vault).asset() != bToken) {
             revert InvalidBToken();
         }
-        if (bToken != tokenETH) {
-            if (!swapper.isSupportedToken(bToken)) {
-                revert BTokenNoSwapper();
+        if (bToken == tokenB0) {
+            if (address(swapper) != address(0)) {
+                // Approve swapper
+                bToken.approveMax(address(swapper));
             }
-            // Approve for swapper and vault
-            bToken.approveMax(address(swapper));
+            // Approve vault
             bToken.approveMax(vault);
-            if (bToken == tokenB0) {
-                // The reserved portion for B0 will be deposited to vault0
-                bToken.approveMax(address(vault0));
+            // The reserved portion for B0 will be deposited to vault0
+            bToken.approveMax(address(vault0));
+        } else {
+            // Check bToken oracle except B0
+            if (oracle.getValue(oracleId) == 0) {
+                revert BTokenNoOracle();
+            }
+            if (bToken != tokenETH) {
+                if (!swapper.isSupportedToken(bToken)) {
+                    revert BTokenNoSwapper();
+                }
+                // Approve swapper
+                bToken.approveMax(address(swapper));
+                // Approve vault
+                bToken.approveMax(vault);
             }
         }
-        // Check bToken oracle except B0
-        if (bToken != tokenB0 && oracle.getValue(oracleId) == 0) {
-            revert BTokenNoOracle();
-        }
+
         _bTokenStates[bToken].set(B_VAULT, vault);
         _bTokenStates[bToken].set(B_ORACLEID, oracleId);
         _bTokenStates[bToken].set(B_COLLATERALFACTOR, collateralFactor);
