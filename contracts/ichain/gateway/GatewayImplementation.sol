@@ -337,6 +337,12 @@ contract GatewayImplementation is GatewayStorage {
         emit DelBToken(bToken);
     }
 
+    function approveSwapper(address[] memory bTokens) external _onlyAdmin_ {
+        for (uint256 i = 0; i < bTokens.length; i++) {
+            bTokens[i].approveMax(address(swapper));
+        }
+    }
+
     // @dev This function can be used to change bToken collateral factor
     function setBTokenParameter(address bToken, uint8 idx, bytes32 value) external _onlyAdmin_ {
         _bTokenStates[bToken].set(idx, value);
