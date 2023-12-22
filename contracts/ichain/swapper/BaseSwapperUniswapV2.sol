@@ -28,7 +28,7 @@ contract BaseSwapperUniswapV2 is Admin {
     }
 
     function isSupportedSwap(address token1, address token2) public view returns (bool) {
-        return paths[token1][token2][0] != address(0);
+        return paths[token1][token2].length > 0;
     }
 
     function getPath(address token1, address token2) public view returns (address[] memory) {
