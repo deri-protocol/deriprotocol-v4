@@ -12,6 +12,8 @@ import '@openzeppelin/contracts/utils/cryptography/ECDSA.sol';
 import '../../library/Bytes32Map.sol';
 import '../../library/ETHAndERC20.sol';
 import '../../library/SafeMath.sol';
+import { GatewayIndex as I } from './GatewayIndex.sol';
+import './GatewayHelper.sol';
 import './GatewayStorage.sol';
 
 contract GatewayImplementation is GatewayStorage {
@@ -21,14 +23,9 @@ contract GatewayImplementation is GatewayStorage {
     using SafeMath for uint256;
     using SafeMath for int256;
 
-    error CannotDelBToken();
-    error BTokenDupInitialize();
-    error BTokenNoSwapper();
-    error BTokenNoOracle();
     error InvalidBToken();
     error InvalidBAmount();
     error InvalidBPrice();
-    error InvalidCustodian();
     error InvalidLTokenId();
     error InvalidPTokenId();
     error InvalidRequestId();
@@ -36,14 +33,6 @@ contract GatewayImplementation is GatewayStorage {
     error InvalidSignature();
     error InsufficientB0();
     error InsufficientExecutionFee();
-
-    event AddBToken(address bToken, address vault, bytes32 oracleId, uint256 collateralFactor);
-
-    event DelBToken(address bToken);
-
-    event UpdateBToken(address bToken);
-
-    event SetExecutionFee(uint256 actionId, uint256 executionFee);
 
     event RequestUpdateLiquidity(
         uint256 requestId,
@@ -128,31 +117,6 @@ contract GatewayImplementation is GatewayStorage {
         int256  lpPnl
     );
 
-    uint8 constant S_CUMULATIVEPNLONGATEWAY     = 1; // Cumulative pnl on Gateway
-    uint8 constant S_LIQUIDITYTIME              = 2; // Last timestamp when liquidity updated
-    uint8 constant S_TOTALLIQUIDITY             = 3; // Total liquidity on d-chain
-    uint8 constant S_CUMULATIVETIMEPERLIQUIDITY = 4; // Cumulavie time per liquidity
-    uint8 constant S_GATEWAYREQUESTID           = 5; // Gateway request id
-
-    uint8 constant B_VAULT             = 1; // BToken vault address
-    uint8 constant B_ORACLEID          = 2; // BToken oracle id
-    uint8 constant B_COLLATERALFACTOR  = 3; // BToken collateral factor
-
-    uint8 constant D_REQUESTID                      = 1; // Lp/Trader request id
-    uint8 constant D_BTOKEN                         = 2; // Lp/Trader bToken
-    uint8 constant D_B0AMOUNT                       = 3; // Lp/Trader b0Amount
-    uint8 constant D_LASTCUMULATIVEPNLONENGINE      = 4; // Lp/Trader last cumulative pnl on engine
-    uint8 constant D_LIQUIDITY                      = 5; // Lp liquidity
-    uint8 constant D_CUMULATIVETIME                 = 6; // Lp cumulative time
-    uint8 constant D_LASTCUMULATIVETIMEPERLIQUIDITY = 7; // Lp last cumulative time per liquidity
-    uint8 constant D_SINGLEPOSITION                 = 8; // Td single position flag
-
-    uint256 constant ACTION_REQUESTADDLIQUIDITY         = 1;
-    uint256 constant ACTION_REQUESTREMOVELIQUIDITY      = 2;
-    uint256 constant ACTION_REQUESTREMOVEMARGIN         = 3;
-    uint256 constant ACTION_REQUESTTRADE                = 4;
-    uint256 constant ACTION_REQUESTTRADEANDREMOVEMARGIN = 5;
-
     uint256 constant UONE = 1e18;
     int256  constant ONE = 1e18;
     address constant tokenETH = address(1);
@@ -220,49 +184,31 @@ contract GatewayImplementation is GatewayStorage {
     }
 
     function getGatewayState() external view returns (IGateway.GatewayState memory s) {
-        s.cumulativePnlOnGateway = _gatewayStates.getInt(S_CUMULATIVEPNLONGATEWAY);
-        s.liquidityTime = _gatewayStates.getUint(S_LIQUIDITYTIME);
-        s.totalLiquidity = _gatewayStates.getUint(S_TOTALLIQUIDITY);
-        s.cumulativeTimePerLiquidity = _gatewayStates.getInt(S_CUMULATIVETIMEPERLIQUIDITY);
-        s.gatewayRequestId = _gatewayStates.getUint(S_GATEWAYREQUESTID);
+        return GatewayHelper.getGatewayState(_gatewayStates);
     }
 
     function getBTokenState(address bToken) external view returns (IGateway.BTokenState memory s) {
-        s.vault = _bTokenStates[bToken].getAddress(B_VAULT);
-        s.oracleId = _bTokenStates[bToken].getBytes32(B_ORACLEID);
-        s.collateralFactor = _bTokenStates[bToken].getUint(B_COLLATERALFACTOR);
+        return GatewayHelper.getBTokenState(_bTokenStates, bToken);
     }
 
     function getLpState(uint256 lTokenId) external view returns (IGateway.LpState memory s) {
-        s.requestId = _dTokenStates[lTokenId].getUint(D_REQUESTID);
-        s.bToken = _dTokenStates[lTokenId].getAddress(D_BTOKEN);
-        s.bAmount = IVault(_bTokenStates[s.bToken].getAddress(B_VAULT)).getBalance(lTokenId);
-        s.b0Amount = _dTokenStates[lTokenId].getInt(D_B0AMOUNT);
-        s.lastCumulativePnlOnEngine = _dTokenStates[lTokenId].getInt(D_LASTCUMULATIVEPNLONENGINE);
-        s.liquidity = _dTokenStates[lTokenId].getUint(D_LIQUIDITY);
-        s.cumulativeTime = _dTokenStates[lTokenId].getUint(D_CUMULATIVETIME);
-        s.lastCumulativeTimePerLiquidity = _dTokenStates[lTokenId].getUint(D_LASTCUMULATIVETIMEPERLIQUIDITY);
+        return GatewayHelper.getLpState(_bTokenStates, _dTokenStates, lTokenId);
     }
 
     function getTdState(uint256 pTokenId) external view returns (IGateway.TdState memory s) {
-        s.requestId = _dTokenStates[pTokenId].getUint(D_REQUESTID);
-        s.bToken = _dTokenStates[pTokenId].getAddress(D_BTOKEN);
-        s.bAmount = IVault(_bTokenStates[s.bToken].getAddress(B_VAULT)).getBalance(pTokenId);
-        s.b0Amount = _dTokenStates[pTokenId].getInt(D_B0AMOUNT);
-        s.lastCumulativePnlOnEngine = _dTokenStates[pTokenId].getInt(D_LASTCUMULATIVEPNLONENGINE);
-        s.singlePosition = _dTokenStates[pTokenId].getBool(D_SINGLEPOSITION);
+        return GatewayHelper.getTdState(_bTokenStates, _dTokenStates, pTokenId);
     }
 
     // @notice Calculate Lp's cumulative time, used in liquidity mining reward distributions
     function getCumulativeTime(uint256 lTokenId)
     public view returns (uint256 cumulativeTimePerLiquidity, uint256 cumulativeTime)
     {
-        uint256 liquidityTime = _gatewayStates.getUint(S_LIQUIDITYTIME);
-        uint256 totalLiquidity = _gatewayStates.getUint(S_TOTALLIQUIDITY);
-        cumulativeTimePerLiquidity = _gatewayStates.getUint(S_CUMULATIVETIMEPERLIQUIDITY);
-        uint256 liquidity = _dTokenStates[lTokenId].getUint(D_LIQUIDITY);
-        cumulativeTime = _dTokenStates[lTokenId].getUint(D_CUMULATIVETIME);
-        uint256 lastCumulativeTimePerLiquidity = _dTokenStates[lTokenId].getUint(D_LASTCUMULATIVETIMEPERLIQUIDITY);
+        uint256 liquidityTime = _gatewayStates.getUint(I.S_LIQUIDITYTIME);
+        uint256 totalLiquidity = _gatewayStates.getUint(I.S_TOTALLIQUIDITY);
+        cumulativeTimePerLiquidity = _gatewayStates.getUint(I.S_CUMULATIVETIMEPERLIQUIDITY);
+        uint256 liquidity = _dTokenStates[lTokenId].getUint(I.D_LIQUIDITY);
+        cumulativeTime = _dTokenStates[lTokenId].getUint(I.D_CUMULATIVETIME);
+        uint256 lastCumulativeTimePerLiquidity = _dTokenStates[lTokenId].getUint(I.D_LASTCUMULATIVETIMEPERLIQUIDITY);
 
         if (totalLiquidity != 0) {
             uint256 diff1 = (block.timestamp - liquidityTime) * UONE * UONE / totalLiquidity;
@@ -277,12 +223,7 @@ contract GatewayImplementation is GatewayStorage {
     }
 
     function getExecutionFees() public view returns (uint256[] memory fees) {
-        fees = new uint256[](5);
-        fees[0] = _executionFees[ACTION_REQUESTADDLIQUIDITY];
-        fees[1] = _executionFees[ACTION_REQUESTREMOVELIQUIDITY];
-        fees[2] = _executionFees[ACTION_REQUESTREMOVEMARGIN];
-        fees[3] = _executionFees[ACTION_REQUESTTRADE];
-        fees[4] = _executionFees[ACTION_REQUESTTRADEANDREMOVEMARGIN];
+        return GatewayHelper.getExecutionFees(_executionFees);
     }
 
     //================================================================================
@@ -295,85 +236,62 @@ contract GatewayImplementation is GatewayStorage {
         bytes32 oracleId,
         uint256 collateralFactor
     ) external _onlyAdmin_ {
-        if (_bTokenStates[bToken].getAddress(B_VAULT) != address(0)) {
-            revert BTokenDupInitialize();
-        }
-        if (IVault(vault).asset() != bToken) {
-            revert InvalidBToken();
-        }
-        if (bToken != tokenETH) {
-            if (!swapper.isSupportedToken(bToken)) {
-                revert BTokenNoSwapper();
-            }
-            // Approve for swapper and vault
-            bToken.approveMax(address(swapper));
-            bToken.approveMax(vault);
-            if (bToken == tokenB0) {
-                // The reserved portion for B0 will be deposited to vault0
-                bToken.approveMax(address(vault0));
-            }
-        }
-        // Check bToken oracle except B0
-        if (bToken != tokenB0 && oracle.getValue(oracleId) == 0) {
-            revert BTokenNoOracle();
-        }
-        _bTokenStates[bToken].set(B_VAULT, vault);
-        _bTokenStates[bToken].set(B_ORACLEID, oracleId);
-        _bTokenStates[bToken].set(B_COLLATERALFACTOR, collateralFactor);
-
-        emit AddBToken(bToken, vault, oracleId, collateralFactor);
+        GatewayHelper.addBToken(
+            _bTokenStates,
+            swapper,
+            oracle,
+            vault0,
+            tokenB0,
+            bToken,
+            vault,
+            oracleId,
+            collateralFactor
+        );
     }
 
     function delBToken(address bToken) external _onlyAdmin_ {
-        // bToken can only be deleted when there is no deposits
-        if (IVault(_bTokenStates[bToken].getAddress(B_VAULT)).stTotalAmount() != 0) {
-            revert CannotDelBToken();
-        }
-
-        _bTokenStates[bToken].del(B_VAULT);
-        _bTokenStates[bToken].del(B_ORACLEID);
-        _bTokenStates[bToken].del(B_COLLATERALFACTOR);
-
-        emit DelBToken(bToken);
-    }
-
-    function approveSwapper(address[] memory bTokens) external _onlyAdmin_ {
-        for (uint256 i = 0; i < bTokens.length; i++) {
-            bTokens[i].approveMax(address(swapper));
-        }
+        GatewayHelper.delBToken(_bTokenStates, bToken);
     }
 
     // @dev This function can be used to change bToken collateral factor
     function setBTokenParameter(address bToken, uint8 idx, bytes32 value) external _onlyAdmin_ {
-        _bTokenStates[bToken].set(idx, value);
-        emit UpdateBToken(bToken);
+        GatewayHelper.setBTokenParameter(_bTokenStates, bToken, idx, value);
     }
 
     // @notice Set execution fee for actionId
     function setExecutionFee(uint256 actionId, uint256 executionFee) external _onlyAdmin_ {
-        _executionFees[actionId] = executionFee;
-        emit SetExecutionFee(actionId, executionFee);
+        GatewayHelper.setExecutionFee(_executionFees, actionId, executionFee);
     }
 
-    // @notic Claim executionFee to account `to`
-    function claimExecutionFee(address to) external _onlyAdmin_ {
-        tokenETH.transferOut(to, tokenETH.balanceOfThis());
+    function setDChainExecutionFeePerRequest(uint256 dChainExecutionFeePerRequest) external _onlyAdmin_ {
+        GatewayHelper.setDChainExecutionFeePerRequest(_gatewayStates, dChainExecutionFeePerRequest);
+    }
+
+    // @notic Claim dChain executionFee to account `to`
+    function claimDChainExecutionFee(address to) external _onlyAdmin_ {
+        GatewayHelper.claimDChainExecutionFee(_gatewayStates, to);
+    }
+
+    // @notice Claim unused iChain execution fee for dTokenId
+    function claimUnusedIChainExecutionFee(uint256 dTokenId, bool isLp) external {
+        GatewayHelper.claimUnusedIChainExecutionFee(
+            _gatewayStates,
+            _dTokenStates,
+            lToken,
+            pToken,
+            dTokenId,
+            isLp
+        );
+    }
+
+    // @notice Redeem B0 for burning IOU
+    function redeemIOU(uint256 b0Amount) external {
+        GatewayHelper.redeemIOU(tokenB0, vault0, iou, msg.sender, b0Amount);
     }
 
     //================================================================================
     // Interactions
     //================================================================================
-
-    // @notice Redeem B0 for burning IOU
-    function redeemIOU(uint256 b0Amount) external {
-        if (b0Amount > 0) {
-            uint256 b0Redeemed = vault0.redeem(uint256(0), b0Amount);
-            if (b0Redeemed > 0) {
-                iou.burn(msg.sender, b0Redeemed);
-                tokenB0.transferOut(msg.sender, b0Redeemed);
-            }
-        }
-    }
 
     /**
      * @notice Request to add liquidity with specified base token.
@@ -391,7 +309,7 @@ contract GatewayImplementation is GatewayStorage {
 
         Data memory data = _getData(msg.sender, lTokenId, bToken);
 
-        uint256 ethAmount = _receiveExecutionFee(_executionFees[ACTION_REQUESTADDLIQUIDITY]);
+        uint256 ethAmount = _receiveExecutionFee(lTokenId, _executionFees[I.ACTION_REQUESTADDLIQUIDITY]);
         if (bToken == tokenETH) {
             bAmount = ethAmount;
         }
@@ -428,7 +346,7 @@ contract GatewayImplementation is GatewayStorage {
     function requestRemoveLiquidity(uint256 lTokenId, address bToken, uint256 bAmount) external payable {
         _checkLTokenIdOwner(lTokenId, msg.sender);
 
-        _receiveExecutionFee(_executionFees[ACTION_REQUESTREMOVELIQUIDITY]);
+        _receiveExecutionFee(lTokenId, _executionFees[I.ACTION_REQUESTREMOVELIQUIDITY]);
         if (bAmount == 0) {
             revert InvalidBAmount();
         }
@@ -464,7 +382,7 @@ contract GatewayImplementation is GatewayStorage {
         if (pTokenId == 0) {
             pTokenId = pToken.mint(msg.sender);
             if (singlePosition) {
-                _dTokenStates[pTokenId].set(D_SINGLEPOSITION, true);
+                _dTokenStates[pTokenId].set(I.D_SINGLEPOSITION, true);
             }
         } else {
             _checkPTokenIdOwner(pTokenId, msg.sender);
@@ -509,7 +427,7 @@ contract GatewayImplementation is GatewayStorage {
     function requestRemoveMargin(uint256 pTokenId, address bToken, uint256 bAmount) external payable {
         _checkPTokenIdOwner(pTokenId, msg.sender);
 
-        _receiveExecutionFee(_executionFees[ACTION_REQUESTREMOVEMARGIN]);
+        _receiveExecutionFee(pTokenId, _executionFees[I.ACTION_REQUESTREMOVEMARGIN]);
         if (bAmount == 0) {
             revert InvalidBAmount();
         }
@@ -542,9 +460,9 @@ contract GatewayImplementation is GatewayStorage {
     function requestTrade(uint256 pTokenId, bytes32 symbolId, int256[] calldata tradeParams) public payable {
         _checkPTokenIdOwner(pTokenId, msg.sender);
 
-        _receiveExecutionFee(_executionFees[ACTION_REQUESTTRADE]);
+        _receiveExecutionFee(pTokenId, _executionFees[I.ACTION_REQUESTTRADE]);
 
-        Data memory data = _getData(msg.sender, pTokenId, _dTokenStates[pTokenId].getAddress(D_BTOKEN));
+        Data memory data = _getData(msg.sender, pTokenId, _dTokenStates[pTokenId].getAddress(I.D_BTOKEN));
         _getExParams(data);
         uint256 realMoneyMargin = _getDTokenLiquidity(data);
 
@@ -565,7 +483,7 @@ contract GatewayImplementation is GatewayStorage {
      * @param pTokenId The unique identifier of the PToken.
      */
     function requestLiquidate(uint256 pTokenId) external {
-        Data memory data = _getData(pToken.ownerOf(pTokenId), pTokenId, _dTokenStates[pTokenId].getAddress(D_BTOKEN));
+        Data memory data = _getData(pToken.ownerOf(pTokenId), pTokenId, _dTokenStates[pTokenId].getAddress(I.D_BTOKEN));
         _getExParams(data);
         uint256 realMoneyMargin = _getDTokenLiquidity(data);
 
@@ -596,9 +514,11 @@ contract GatewayImplementation is GatewayStorage {
         int256[] calldata tradeParams,
         bool singlePosition
     ) external payable {
-        uint256 ethAmount = _receiveExecutionFee(_executionFees[ACTION_REQUESTTRADE]);
-        if (bToken == tokenETH && bAmount > ethAmount) {
-            revert InvalidBAmount();
+        if (bToken == tokenETH) {
+            uint256 executionFee = _executionFees[I.ACTION_REQUESTTRADE];
+            if (bAmount + executionFee > msg.value) { // revert if bAmount > msg.value - executionFee
+                revert InvalidBAmount();
+            }
         }
         pTokenId = requestAddMargin(pTokenId, bToken, bAmount, singlePosition);
         requestTrade(pTokenId, symbolId, tradeParams);
@@ -621,7 +541,7 @@ contract GatewayImplementation is GatewayStorage {
     ) external payable {
         _checkPTokenIdOwner(pTokenId, msg.sender);
 
-        _receiveExecutionFee(_executionFees[ACTION_REQUESTTRADEANDREMOVEMARGIN]);
+        _receiveExecutionFee(pTokenId, _executionFees[I.ACTION_REQUESTTRADEANDREMOVEMARGIN]);
         if (bAmount == 0) {
             revert InvalidBAmount();
         }
@@ -660,7 +580,7 @@ contract GatewayImplementation is GatewayStorage {
         _updateLiquidity(v.lTokenId, v.liquidity, v.totalLiquidity);
 
         // Cumulate unsettled PNL to b0Amount
-        Data memory data = _getData(lToken.ownerOf(v.lTokenId), v.lTokenId, _dTokenStates[v.lTokenId].getAddress(D_BTOKEN));
+        Data memory data = _getData(lToken.ownerOf(v.lTokenId), v.lTokenId, _dTokenStates[v.lTokenId].getAddress(I.D_BTOKEN));
         int256 diff = v.cumulativePnlOnEngine.minusUnchecked(data.lastCumulativePnlOnEngine);
         data.b0Amount += diff.rescaleDown(18, decimalsB0);
         data.lastCumulativePnlOnEngine = v.cumulativePnlOnEngine;
@@ -672,6 +592,8 @@ contract GatewayImplementation is GatewayStorage {
         }
 
         _saveData(data);
+
+        _transferLastRequestIChainExecutionFee(v.lTokenId, msg.sender);
 
         if (v.bAmountToRemove == 0) {
             // If bAmountToRemove == 0, it is a AddLiqudiity finalization
@@ -705,7 +627,7 @@ contract GatewayImplementation is GatewayStorage {
         _checkRequestId(v.pTokenId, v.requestId);
 
         // Cumulate unsettled PNL to b0Amount
-        Data memory data = _getData(pToken.ownerOf(v.pTokenId), v.pTokenId, _dTokenStates[v.pTokenId].getAddress(D_BTOKEN));
+        Data memory data = _getData(pToken.ownerOf(v.pTokenId), v.pTokenId, _dTokenStates[v.pTokenId].getAddress(I.D_BTOKEN));
         int256 diff = v.cumulativePnlOnEngine.minusUnchecked(data.lastCumulativePnlOnEngine);
         data.b0Amount += diff.rescaleDown(18, decimalsB0);
         data.lastCumulativePnlOnEngine = v.cumulativePnlOnEngine;
@@ -718,6 +640,8 @@ contract GatewayImplementation is GatewayStorage {
         }
 
         _saveData(data);
+
+        _transferLastRequestIChainExecutionFee(v.pTokenId, msg.sender);
 
         emit FinishRemoveMargin(
             v.requestId,
@@ -737,7 +661,7 @@ contract GatewayImplementation is GatewayStorage {
         IGateway.VarOnExecuteLiquidate memory v = abi.decode(eventData, (IGateway.VarOnExecuteLiquidate));
 
         // Cumulate unsettled PNL to b0Amount
-        Data memory data = _getData(pToken.ownerOf(v.pTokenId), v.pTokenId, _dTokenStates[v.pTokenId].getAddress(D_BTOKEN));
+        Data memory data = _getData(pToken.ownerOf(v.pTokenId), v.pTokenId, _dTokenStates[v.pTokenId].getAddress(I.D_BTOKEN));
         int256 diff = v.cumulativePnlOnEngine.minusUnchecked(data.lastCumulativePnlOnEngine);
         data.b0Amount += diff.rescaleDown(18, decimalsB0);
         data.lastCumulativePnlOnEngine = v.cumulativePnlOnEngine;
@@ -795,6 +719,18 @@ contract GatewayImplementation is GatewayStorage {
         data.cumulativePnlOnGateway = data.cumulativePnlOnGateway.addUnchecked(lpPnl.rescale(decimalsB0, 18));
         data.b0Amount = 0;
         _saveData(data);
+
+        {
+            uint256 lastRequestIChainExecutionFee = _dTokenStates[v.pTokenId].getUint(I.D_LASTREQUESTICHAINEXECUTIONFEE);
+            uint256 cumulativeUnusedIChainExecutionFee = _dTokenStates[v.pTokenId].getUint(I.D_CUMULATIVEUNUSEDICHAINEXECUTIONFEE);
+            _dTokenStates[v.pTokenId].del(I.D_LASTREQUESTICHAINEXECUTIONFEE);
+            _dTokenStates[v.pTokenId].del(I.D_CUMULATIVEUNUSEDICHAINEXECUTIONFEE);
+
+            uint256 totalIChainExecutionFee = _gatewayStates.getUint(I.S_TOTALICHAINEXECUTIONFEE);
+            totalIChainExecutionFee -= lastRequestIChainExecutionFee + cumulativeUnusedIChainExecutionFee;
+            _gatewayStates.set(I.S_TOTALICHAINEXECUTIONFEE, totalIChainExecutionFee);
+        }
+
         pToken.burn(v.pTokenId);
 
         emit FinishLiquidate(
@@ -829,20 +765,20 @@ contract GatewayImplementation is GatewayStorage {
         data.dTokenId = dTokenId;
         data.bToken = bToken;
 
-        data.cumulativePnlOnGateway = _gatewayStates.getInt(S_CUMULATIVEPNLONGATEWAY);
-        data.vault = _bTokenStates[bToken].getAddress(B_VAULT);
+        data.cumulativePnlOnGateway = _gatewayStates.getInt(I.S_CUMULATIVEPNLONGATEWAY);
+        data.vault = _bTokenStates[bToken].getAddress(I.B_VAULT);
 
-        data.b0Amount = _dTokenStates[dTokenId].getInt(D_B0AMOUNT);
-        data.lastCumulativePnlOnEngine = _dTokenStates[dTokenId].getInt(D_LASTCUMULATIVEPNLONENGINE);
+        data.b0Amount = _dTokenStates[dTokenId].getInt(I.D_B0AMOUNT);
+        data.lastCumulativePnlOnEngine = _dTokenStates[dTokenId].getInt(I.D_LASTCUMULATIVEPNLONENGINE);
 
         _checkBTokenConsistency(dTokenId, bToken);
     }
 
     function _saveData(Data memory data) internal {
-        _gatewayStates.set(S_CUMULATIVEPNLONGATEWAY, data.cumulativePnlOnGateway);
-        _dTokenStates[data.dTokenId].set(D_BTOKEN, data.bToken);
-        _dTokenStates[data.dTokenId].set(D_B0AMOUNT, data.b0Amount);
-        _dTokenStates[data.dTokenId].set(D_LASTCUMULATIVEPNLONENGINE, data.lastCumulativePnlOnEngine);
+        _gatewayStates.set(I.S_CUMULATIVEPNLONGATEWAY, data.cumulativePnlOnGateway);
+        _dTokenStates[data.dTokenId].set(I.D_BTOKEN, data.bToken);
+        _dTokenStates[data.dTokenId].set(I.D_B0AMOUNT, data.b0Amount);
+        _dTokenStates[data.dTokenId].set(I.D_LASTCUMULATIVEPNLONENGINE, data.lastCumulativePnlOnEngine);
     }
 
     // @notice Check callback's requestId is the same as the current requestId stored for user
@@ -850,11 +786,11 @@ contract GatewayImplementation is GatewayStorage {
     // and this callback cannot be executed anymore
     function _checkRequestId(uint256 dTokenId, uint256 requestId) internal {
         uint128 userRequestId = uint128(requestId);
-        if (_dTokenStates[dTokenId].getUint(D_REQUESTID) != uint256(userRequestId)) {
+        if (_dTokenStates[dTokenId].getUint(I.D_REQUESTID) != uint256(userRequestId)) {
             revert InvalidRequestId();
         } else {
             // increment requestId so that callback can only be executed once
-            _dTokenStates[dTokenId].set(D_REQUESTID, uint256(userRequestId + 1));
+            _dTokenStates[dTokenId].set(I.D_REQUESTID, uint256(userRequestId + 1));
         }
     }
 
@@ -864,28 +800,28 @@ contract GatewayImplementation is GatewayStorage {
     //   * Lower 128 bits stores user's requestId, only increments when request is from this user
     //   * Higher 128 bits stores gateways's requestId, increments for all new requests in this contract
     function _incrementRequestId(uint256 dTokenId) internal returns (uint256) {
-        uint128 gatewayRequestId = uint128(_gatewayStates.getUint(S_GATEWAYREQUESTID));
+        uint128 gatewayRequestId = uint128(_gatewayStates.getUint(I.S_GATEWAYREQUESTID));
         gatewayRequestId += 1;
-        _gatewayStates.set(S_GATEWAYREQUESTID, uint256(gatewayRequestId));
+        _gatewayStates.set(I.S_GATEWAYREQUESTID, uint256(gatewayRequestId));
 
-        uint128 userRequestId = uint128(_dTokenStates[dTokenId].getUint(D_REQUESTID));
+        uint128 userRequestId = uint128(_dTokenStates[dTokenId].getUint(I.D_REQUESTID));
         userRequestId += 1;
-        _dTokenStates[dTokenId].set(D_REQUESTID, uint256(userRequestId));
+        _dTokenStates[dTokenId].set(I.D_REQUESTID, uint256(userRequestId));
 
         uint256 requestId = (uint256(gatewayRequestId) << 128) + uint256(userRequestId);
         return requestId;
     }
 
     function _checkBTokenInitialized(address bToken) internal view {
-        if (_bTokenStates[bToken].getAddress(B_VAULT) == address(0)) {
+        if (_bTokenStates[bToken].getAddress(I.B_VAULT) == address(0)) {
             revert InvalidBToken();
         }
     }
 
     function _checkBTokenConsistency(uint256 dTokenId, address bToken) internal view {
-        address preBToken = _dTokenStates[dTokenId].getAddress(D_BTOKEN);
+        address preBToken = _dTokenStates[dTokenId].getAddress(I.D_BTOKEN);
         if (preBToken != address(0) && preBToken != bToken) {
-            uint256 stAmount = IVault(_bTokenStates[preBToken].getAddress(B_VAULT)).stAmounts(dTokenId);
+            uint256 stAmount = IVault(_bTokenStates[preBToken].getAddress(I.B_VAULT)).stAmounts(dTokenId);
             if (stAmount != 0) {
                 revert InvalidBToken();
             }
@@ -904,11 +840,38 @@ contract GatewayImplementation is GatewayStorage {
         }
     }
 
-    function _receiveExecutionFee(uint256 executionFee) internal view returns (uint256) {
+    function _receiveExecutionFee(uint256 dTokenId, uint256 executionFee) internal returns (uint256) {
+        uint256 dChainExecutionFee = _gatewayStates.getUint(I.S_DCHAINEXECUTIONFEEPERREQUEST);
         if (msg.value < executionFee) {
             revert InsufficientExecutionFee();
         }
+        uint256 iChainExecutionFee = executionFee - dChainExecutionFee;
+
+        uint256 totalIChainExecutionFee = _gatewayStates.getUint(I.S_TOTALICHAINEXECUTIONFEE) + iChainExecutionFee;
+        _gatewayStates.set(I.S_TOTALICHAINEXECUTIONFEE,  totalIChainExecutionFee);
+
+        uint256 lastRequestIChainExecutionFee = _dTokenStates[dTokenId].getUint(I.D_LASTREQUESTICHAINEXECUTIONFEE);
+        uint256 cumulativeUnusedIChainExecutionFee = _dTokenStates[dTokenId].getUint(I.D_CUMULATIVEUNUSEDICHAINEXECUTIONFEE);
+        cumulativeUnusedIChainExecutionFee += lastRequestIChainExecutionFee;
+        lastRequestIChainExecutionFee = iChainExecutionFee;
+        _dTokenStates[dTokenId].set(I.D_LASTREQUESTICHAINEXECUTIONFEE, lastRequestIChainExecutionFee);
+        _dTokenStates[dTokenId].set(I.D_CUMULATIVEUNUSEDICHAINEXECUTIONFEE, cumulativeUnusedIChainExecutionFee);
+
         return msg.value - executionFee;
+    }
+
+    function _transferLastRequestIChainExecutionFee(uint256 dTokenId, address to) internal {
+        uint256 lastRequestIChainExecutionFee = _dTokenStates[dTokenId].getUint(I.D_LASTREQUESTICHAINEXECUTIONFEE);
+
+        if (lastRequestIChainExecutionFee > 0) {
+            uint256 totalIChainExecutionFee = _gatewayStates.getUint(I.S_TOTALICHAINEXECUTIONFEE);
+            totalIChainExecutionFee -= lastRequestIChainExecutionFee;
+            _gatewayStates.set(I.S_TOTALICHAINEXECUTIONFEE, totalIChainExecutionFee);
+
+            _dTokenStates[dTokenId].del(I.D_LASTREQUESTICHAINEXECUTIONFEE);
+
+            tokenETH.transferOut(to, lastRequestIChainExecutionFee);
+        }
     }
 
     // @dev bPrice * bAmount / UONE = b0Amount, b0Amount in decimalsB0
@@ -917,7 +880,7 @@ contract GatewayImplementation is GatewayStorage {
             bPrice = UONE;
         } else {
             uint8 decimalsB = bToken.decimals();
-            bPrice = oracle.getValue(_bTokenStates[bToken].getBytes32(B_ORACLEID)).itou().rescale(decimalsB, decimalsB0);
+            bPrice = oracle.getValue(_bTokenStates[bToken].getBytes32(I.B_ORACLEID)).itou().rescale(decimalsB, decimalsB0);
             if (bPrice == 0) {
                 revert InvalidBPrice();
             }
@@ -925,7 +888,7 @@ contract GatewayImplementation is GatewayStorage {
     }
 
     function _getExParams(Data memory data) internal view {
-        data.collateralFactor = _bTokenStates[data.bToken].getUint(B_COLLATERALFACTOR);
+        data.collateralFactor = _bTokenStates[data.bToken].getUint(I.B_COLLATERALFACTOR);
         data.bPrice = _getBPrice(data.bToken);
     }
 
@@ -1130,12 +1093,12 @@ contract GatewayImplementation is GatewayStorage {
      */
     function _updateLiquidity(uint256 lTokenId, uint256 newLiquidity, uint256 newTotalLiquidity) internal {
         (uint256 cumulativeTimePerLiquidity, uint256 cumulativeTime) = getCumulativeTime(lTokenId);
-        _gatewayStates.set(S_LIQUIDITYTIME, block.timestamp);
-        _gatewayStates.set(S_TOTALLIQUIDITY, newTotalLiquidity);
-        _gatewayStates.set(S_CUMULATIVETIMEPERLIQUIDITY, cumulativeTimePerLiquidity);
-        _dTokenStates[lTokenId].set(D_LIQUIDITY, newLiquidity);
-        _dTokenStates[lTokenId].set(D_CUMULATIVETIME, cumulativeTime);
-        _dTokenStates[lTokenId].set(D_LASTCUMULATIVETIMEPERLIQUIDITY, cumulativeTimePerLiquidity);
+        _gatewayStates.set(I.S_LIQUIDITYTIME, block.timestamp);
+        _gatewayStates.set(I.S_TOTALLIQUIDITY, newTotalLiquidity);
+        _gatewayStates.set(I.S_CUMULATIVETIMEPERLIQUIDITY, cumulativeTimePerLiquidity);
+        _dTokenStates[lTokenId].set(I.D_LIQUIDITY, newLiquidity);
+        _dTokenStates[lTokenId].set(I.D_CUMULATIVETIME, cumulativeTime);
+        _dTokenStates[lTokenId].set(I.D_LASTCUMULATIVETIMEPERLIQUIDITY, cumulativeTimePerLiquidity);
     }
 
     function _verifyEventData(bytes memory eventData, bytes memory signature) internal view {
