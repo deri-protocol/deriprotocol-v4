@@ -37,9 +37,10 @@ contract OracleImplementation is OracleStorage {
     uint8 constant S_SECONDSAGO     = 11; // when use uniswapV3 oracle, the consult seconds ago
     uint8 constant S_QUOTEORACLEID  = 12; // when use uniswapV3 oracle, the quote oracleId
 
-    uint256 constant SOURCE_OFFCHAIN     = 1;
-    uint256 constant SOURCE_CHAINLINK    = 2;
-    uint256 constant SOURCE_UNISWAPV3    = 3;
+    uint256 constant SOURCE_OFFCHAIN  = 1;
+    uint256 constant SOURCE_CHAINLINK = 2;
+    uint256 constant SOURCE_UNISWAPV3 = 3;
+    uint256 constant SOURCE_IZUMI     = 4;
 
     int256 constant ONE = 1e18;
 
@@ -129,6 +130,34 @@ contract OracleImplementation is OracleStorage {
         emit NewOracle(oracleId, SOURCE_UNISWAPV3);
     }
 
+    function setIzumiOracle(
+        string memory symbol,
+        address pool,
+        address baseToken,
+        address quoteToken,
+        uint256 secondsAgo,
+        bytes32 quoteOracleId
+    ) external _onlyAdmin_ {
+        bytes32 oracleId = getOracleId(symbol);
+        address tokenX = IIzumiPool(pool).tokenX();
+        address tokenY = IIzumiPool(pool).tokenY();
+        require(
+            (baseToken == tokenX || baseToken == tokenY) &&
+            (quoteToken == tokenX || quoteToken == tokenY)
+        );
+        _states[oracleId].set(S_SYMBOL, symbol);
+        _states[oracleId].set(S_SOURCE, SOURCE_IZUMI);
+        _states[oracleId].set(S_UNISWAPV3POOL, pool);
+        _states[oracleId].set(S_BASETOKEN, baseToken);
+        _states[oracleId].set(S_QUOTETOKEN, quoteToken);
+        _states[oracleId].set(S_SECONDSAGO, secondsAgo);
+        _states[oracleId].set(S_QUOTEORACLEID, quoteOracleId);
+        if (quoteOracleId != bytes32(0)) {
+            getValue(quoteOracleId); // make sure quote oracle works
+        }
+        emit NewOracle(oracleId, SOURCE_IZUMI);
+    }
+
     function updateOffchainValue(IOracle.Signature memory sig) public {
         bytes32 message = keccak256(abi.encodePacked(sig.oracleId, sig.timestamp, sig.value));
         _verifyMessage(message, sig.v, sig.r, sig.s);
@@ -201,6 +230,50 @@ contract OracleImplementation is OracleStorage {
         return (block.number, block.timestamp, value);
     }
 
+    function _getValueIzumi(bytes32 oracleId)
+    internal view returns (uint256 blockNumber, uint256 timestamp, int256 value)
+    {
+        address pool = _states[oracleId].getAddress(S_UNISWAPV3POOL);
+        if (pool == address(0)) {
+            revert InvalidUniswapV3Pool();
+        }
+        address baseToken = _states[oracleId].getAddress(S_BASETOKEN);
+        address quoteToken = _states[oracleId].getAddress(S_QUOTETOKEN);
+        uint32 secondsAgo = uint32(_states[oracleId].getUint(S_SECONDSAGO));
+
+        int24 arithmeticMeanTick;
+        {
+            uint32[] memory secondsAgos = new uint32[](2);
+            secondsAgos[0] = secondsAgo;
+            secondsAgos[1] = 0;
+
+            int56[] memory tickCumulatives = IIzumiPool(pool).observe(secondsAgos);
+            int56 tickCumulativesDelta = tickCumulatives[1] - tickCumulatives[0];
+            arithmeticMeanTick = int24(tickCumulativesDelta / int56(uint56(secondsAgo)));
+            if (tickCumulativesDelta < 0 && (tickCumulativesDelta % int56(uint56(secondsAgo)) != 0)) arithmeticMeanTick--;
+        }
+
+        uint256 quoteAmount = OracleLibrary.getQuoteAtTick(
+            arithmeticMeanTick,
+            uint128(10 ** (IERC20Metadata(baseToken).decimals())),
+            baseToken,
+            quoteToken
+        );
+
+        uint8 quoteDecimals = IERC20Metadata(quoteToken).decimals();
+        if (quoteDecimals != 18) {
+            quoteAmount *= 10 ** (18 - quoteDecimals);
+        }
+
+        value = quoteAmount.utoi();
+        bytes32 quoteOracleId = _states[oracleId].getBytes32(S_QUOTEORACLEID);
+        if (quoteOracleId != bytes32(0)) {
+            value = value * getValue(quoteOracleId) / ONE;
+        }
+
+        return (block.number, block.timestamp, value);
+    }
+
     function _getValue(bytes32 oracleId)
     internal view returns (uint256 blockNumber, uint256 timestamp, int256 value)
     {
@@ -211,6 +284,8 @@ contract OracleImplementation is OracleStorage {
             return _getValueChainlink(oracleId);
         } else if (source == SOURCE_UNISWAPV3) {
             return _getValueUniswapV3(oracleId);
+        } else if (source == SOURCE_IZUMI) {
+            return _getValueIzumi(oracleId);
         } else {
             revert NoSource();
         }
@@ -232,4 +307,10 @@ contract OracleImplementation is OracleStorage {
         }
     }
 
+}
+
+interface IIzumiPool {
+    function tokenX() external view returns (address);
+    function tokenY() external view returns (address);
+    function observe(uint32[] calldata secondsAgos) external view returns (int56[] memory accPoints);
 }
