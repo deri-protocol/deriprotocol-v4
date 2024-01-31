@@ -36,11 +36,14 @@ contract OracleImplementation is OracleStorage {
     uint8 constant S_QUOTETOKEN     = 10; // when use uniswapV3 oracle, the quote token
     uint8 constant S_SECONDSAGO     = 11; // when use uniswapV3 oracle, the consult seconds ago
     uint8 constant S_QUOTEORACLEID  = 12; // when use uniswapV3 oracle, the quote oracleId
+    uint8 constant S_COMBO1         = 13; // combo oracle 1
+    uint8 constant S_COMBO2         = 14; // combo oracle 2
 
     uint256 constant SOURCE_OFFCHAIN  = 1;
     uint256 constant SOURCE_CHAINLINK = 2;
     uint256 constant SOURCE_UNISWAPV3 = 3;
     uint256 constant SOURCE_IZUMI     = 4;
+    uint256 constant SOURCE_COMBO     = 5;
 
     int256 constant ONE = 1e18;
 
@@ -156,6 +159,19 @@ contract OracleImplementation is OracleStorage {
             getValue(quoteOracleId); // make sure quote oracle works
         }
         emit NewOracle(oracleId, SOURCE_IZUMI);
+    }
+
+    function setComboOracle(
+        string memory symbol,
+        bytes32 combo1,
+        bytes32 combo2
+    ) external _onlyAdmin_ {
+        bytes32 oracleId = getOracleId(symbol);
+        _states[oracleId].set(S_SYMBOL, symbol);
+        _states[oracleId].set(S_SOURCE, SOURCE_COMBO);
+        _states[oracleId].set(S_COMBO1, combo1);
+        _states[oracleId].set(S_COMBO2, combo2);
+        emit NewOracle(oracleId, SOURCE_COMBO);
     }
 
     function updateOffchainValue(IOracle.Signature memory sig) public {
@@ -274,6 +290,18 @@ contract OracleImplementation is OracleStorage {
         return (block.number, block.timestamp, value);
     }
 
+    function _getValueCombo(bytes32 oracleId)
+    internal view returns (uint256 blockNumber, uint256 timestamp, int256 value)
+    {
+        bytes32 combo1 = _states[oracleId].getBytes32(S_COMBO1);
+        bytes32 combo2 = _states[oracleId].getBytes32(S_COMBO2);
+        int256 value1;
+        int256 value2;
+        (blockNumber, timestamp, value1) = _getValue(combo1);
+        (, , value2) = _getValue(combo2);
+        value = value1 * value2 / ONE;
+    }
+
     function _getValue(bytes32 oracleId)
     internal view returns (uint256 blockNumber, uint256 timestamp, int256 value)
     {
@@ -286,6 +314,8 @@ contract OracleImplementation is OracleStorage {
             return _getValueUniswapV3(oracleId);
         } else if (source == SOURCE_IZUMI) {
             return _getValueIzumi(oracleId);
+        } else if (source == SOURCE_COMBO) {
+            return _getValueCombo(oracleId);
         } else {
             revert NoSource();
         }
