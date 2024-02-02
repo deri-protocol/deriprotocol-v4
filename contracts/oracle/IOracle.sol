@@ -4,19 +4,8 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import '../utils/IAdmin.sol';
 import '../utils/IImplementation.sol';
-import '../utils/IVerifier.sol';
 
-interface IOracle is IAdmin, IImplementation, IVerifier {
-
-    struct State {
-        string  symbol;
-        uint256 source;
-        uint256 delayAllowance;
-        uint256 blockNumber;
-        uint256 timestamp;
-        int256  value;
-        address chainlinkFeed;
-    }
+interface IOracle is IAdmin, IImplementation {
 
     struct Signature {
         bytes32 oracleId;
@@ -27,20 +16,12 @@ interface IOracle is IAdmin, IImplementation, IVerifier {
         bytes32 s;
     }
 
-    function getOracleId(string memory symbol) external pure returns (bytes32);
-
-    function getState(bytes32 oracleId) external view returns (State memory s);
-
     function getValue(bytes32 oracleId) external view returns (int256);
 
     function getValueCurrentBlock(bytes32 oracleId) external view returns (int256);
 
-    function setOffchainOracle(string memory symbol, uint256 delayAllowance) external;
+    function updateOffchainValue(Signature memory s) external;
 
-    function setChainlinkOracle(string memory symbol, address feed) external;
-
-    function updateOffchainValue(Signature memory sig) external;
-
-    function updateOffchainValues(Signature[] memory sigs) external;
+    function updateOffchainValues(Signature[] memory ss) external;
 
 }
