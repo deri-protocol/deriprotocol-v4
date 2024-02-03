@@ -27,13 +27,10 @@ contract BaseOracleCombo is Admin {
         }
     }
 
-    // @notice Get oracle value without any checking
     function getValue(bytes32 oracleId) public view returns (int256) {
         return _getValue(oracleId, false);
     }
 
-    // @notice Get oracle value of current block
-    // @dev When source is offchain, value must be updated in current block, otherwise revert
     function getValueCurrentBlock(bytes32 oracleId) public view returns (int256) {
         return _getValue(oracleId, true);
     }

@@ -29,7 +29,7 @@ contract OracleImplementation is OracleStorage {
 
     function updateOffchainValues(IOracle.Signature[] memory ss) public {
         for (uint256 i = 0; i < ss.length; i++) {
-            IOracle(baseOracles[ss[i].oracleId]).updateOffchainValue(ss[i]);
+            updateOffchainValue(ss[i]);
         }
     }
 

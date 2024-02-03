@@ -14,7 +14,6 @@ contract BaseOracleChainlink is Admin {
         chainlinkFeeds[oracleId] = feed;
     }
 
-    // @notice Get oracle value without any checking
     function getValue(bytes32 oracleId) public view returns (int256) {
         IChainlinkFeed feed = IChainlinkFeed(chainlinkFeeds[oracleId]);
         (, int256 value, , ,) = feed.latestRoundData();
@@ -25,8 +24,6 @@ contract BaseOracleChainlink is Admin {
         return value;
     }
 
-    // @notice Get oracle value of current block
-    // @dev When source is offchain, value must be updated in current block, otherwise revert
     function getValueCurrentBlock(bytes32 oracleId) public view returns (int256) {
         return getValue(oracleId);
     }

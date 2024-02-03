@@ -3,7 +3,7 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import '../utils/Admin.sol';
-import './OracleLibrary.sol';
+import '../library/OracleLibrary.sol';
 import '../library/SafeMath.sol';
 import '@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol';
 import '@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol';
@@ -44,7 +44,6 @@ contract BaseOracleUniswapV3 is Admin {
         infos[oracleId].secondsAgo = secondsAgo;
     }
 
-    // @notice Get oracle value without any checking
     function getValue(bytes32 oracleId) public view returns (int256) {
         Info storage info = infos[oracleId];
 
@@ -64,8 +63,6 @@ contract BaseOracleUniswapV3 is Admin {
         return quoteAmount.utoi();
     }
 
-    // @notice Get oracle value of current block
-    // @dev When source is offchain, value must be updated in current block, otherwise revert
     function getValueCurrentBlock(bytes32 oracleId) public view returns (int256) {
         return getValue(oracleId);
     }

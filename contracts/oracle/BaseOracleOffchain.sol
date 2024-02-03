@@ -26,13 +26,10 @@ contract BaseOracleOffchain is Admin, Verifier {
         infos[oracleId].value = initValue;
     }
 
-    // @notice Get oracle value without any checking
     function getValue(bytes32 oracleId) public view returns (int256) {
         return infos[oracleId].value;
     }
 
-    // @notice Get oracle value of current block
-    // @dev When source is offchain, value must be updated in current block, otherwise revert
     function getValueCurrentBlock(bytes32 oracleId) public view returns (int256) {
         uint256 blockNumber = infos[oracleId].lastBlockNumber;
         require(blockNumber == block.number, 'Not current block');
