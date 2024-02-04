@@ -11,9 +11,11 @@ import './ISymbol.sol';
 import './IFutures.sol';
 import './IOption.sol';
 import './IPower.sol';
+import './IGamma.sol';
 import './Futures.sol';
 import './Option.sol';
 import './Power.sol';
+import './Gamma.sol';
 import './SymbolManagerStorage.sol';
 
 contract SymbolManagerImplementation is SymbolManagerStorage {
@@ -33,6 +35,7 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
     uint8 constant CATEGORY_FUTURES = 1;
     uint8 constant CATEGORY_OPTION  = 2;
     uint8 constant CATEGORY_POWER   = 3;
+    uint8 constant CATEGORY_GAMMA   = 4;
 
     address public immutable engine;
     address public immutable oracle;
@@ -83,6 +86,8 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
             s = Option.getState(state);
         } else if (category == CATEGORY_POWER) {
             s = Power.getState(state);
+        } else if (category == CATEGORY_GAMMA) {
+            s = Gamma.getState(state);
         }
     }
 
@@ -95,6 +100,8 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
             pos = Option.getPosition(position);
         } else if (category == CATEGORY_POWER) {
             pos = Power.getPosition(position);
+        } else if (category == CATEGORY_GAMMA) {
+            pos = Gamma.getPosition(position);
         }
     }
 
@@ -117,6 +124,8 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
             Option.setParameter(symbolId, state, p);
         } else if (category == CATEGORY_POWER) {
             Power.setParameter(symbolId, state, p);
+        } else if (category == CATEGORY_GAMMA) {
+            Gamma.setParameter(symbolId, state, p);
         } else {
             revert InvalidSymbolId(symbolId);
         }
@@ -131,6 +140,8 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
             Option.setParameterOfId(symbolId, state, parameterId, value);
         } else if (category == CATEGORY_POWER) {
             Power.setParameterOfId(symbolId, state, parameterId, value);
+        } else if (category == CATEGORY_GAMMA) {
+            Gamma.setParameterOfId(symbolId, state, parameterId, value);
         } else {
             revert InvalidSymbolId(symbolId);
         }
@@ -148,6 +159,8 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
                     Option.setParameterOfId(symbolId, state, parameterId, value);
                 } else if (category == CATEGORY_POWER) {
                     Power.setParameterOfId(symbolId, state, parameterId, value);
+                } else if (category == CATEGORY_GAMMA) {
+                    Gamma.setParameterOfId(symbolId, state, parameterId, value);
                 } else {
                     revert InvalidSymbolId(symbolId);
                 }
@@ -313,9 +326,10 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
         bytes32 oracleId = (
             category == CATEGORY_FUTURES ? state.getBytes32(Futures.S_PRICEID) : (
             category == CATEGORY_OPTION  ? state.getBytes32(Option.S_PRICEID)  : (
-            category == CATEGORY_POWER   ? state.getBytes32(Power.S_PRICEID)   :
+            category == CATEGORY_POWER   ? state.getBytes32(Power.S_PRICEID)   : (
+            category == CATEGORY_GAMMA   ? state.getBytes32(Gamma.S_PRICEID)   :
             bytes32(0)
-        )));
+        ))));
         return IOracle(oracle).getValueCurrentBlock(oracleId);
     }
 
@@ -324,9 +338,10 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
         uint8 category = getCategory(symbolId);
         bytes32 oracleId = (
             category == CATEGORY_OPTION ? state.getBytes32(Option.S_VOLATILITYID) : (
-            category == CATEGORY_POWER  ? state.getBytes32(Power.S_VOLATILITYID)  :
+            category == CATEGORY_POWER  ? state.getBytes32(Power.S_VOLATILITYID)  : (
+            category == CATEGORY_GAMMA  ? state.getBytes32(Gamma.S_VOLATILITYID)  :
             bytes32(0)
-        ));
+        )));
         return IOracle(oracle).getValueCurrentBlock(oracleId);
     }
 
@@ -358,6 +373,16 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
             s = Power.settleOnAddLiquidity(
                 _states[symbolId],
                 IPower.VarOnAddLiquidity(
+                    symbolId,
+                    _getIndexPrice(symbolId),
+                    _getVolatility(symbolId),
+                    liquidity
+                )
+            );
+        } else if (category == CATEGORY_GAMMA) {
+            s = Gamma.settleOnAddLiquidity(
+                _states[symbolId],
+                IGamma.VarOnAddLiquidity(
                     symbolId,
                     _getIndexPrice(symbolId),
                     _getVolatility(symbolId),
@@ -404,6 +429,17 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
                     removedLiquidity
                 )
             );
+        } else if (category == CATEGORY_GAMMA) {
+            s = Gamma.settleOnRemoveLiquidity(
+                _states[symbolId],
+                IGamma.VarOnRemoveLiquidity(
+                    symbolId,
+                    _getIndexPrice(symbolId),
+                    _getVolatility(symbolId),
+                    liquidity,
+                    removedLiquidity
+                )
+            );
         }
     }
 
@@ -440,6 +476,18 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
                 _states[symbolId],
                 _positions[symbolId][pTokenId],
                 IPower.VarOnTraderWithPosition(
+                    symbolId,
+                    pTokenId,
+                    _getIndexPrice(symbolId),
+                    _getVolatility(symbolId),
+                    liquidity
+                )
+            );
+        } else if (category == CATEGORY_GAMMA) {
+            s = Gamma.settleOnTraderWithPosition(
+                _states[symbolId],
+                _positions[symbolId][pTokenId],
+                IGamma.VarOnTraderWithPosition(
                     symbolId,
                     pTokenId,
                     _getIndexPrice(symbolId),
@@ -505,6 +553,23 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
                     tradeParams[1]  // priceLimit
                 )
             );
+        } else if (category == CATEGORY_GAMMA) {
+            _checkTradeParamsLength(tradeParams.length, 4);
+            s = Gamma.settleOnTrade(
+                _states[symbolId],
+                _positions[symbolId][pTokenId],
+                IGamma.VarOnTrade(
+                    symbolId,
+                    pTokenId,
+                    _getIndexPrice(symbolId),
+                    _getVolatility(symbolId),
+                    liquidity,
+                    tradeParams[0], // tradeVolume
+                    tradeParams[1], // entryPrice
+                    tradeParams[2], // powerPriceLimit
+                    tradeParams[3]  // futuresPriceLimit
+                )
+            );
         }
     }
 
@@ -541,6 +606,18 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
                 _states[symbolId],
                 _positions[symbolId][pTokenId],
                 IPower.VarOnLiquidate(
+                    symbolId,
+                    pTokenId,
+                    _getIndexPrice(symbolId),
+                    _getVolatility(symbolId),
+                    liquidity
+                )
+            );
+        } else if (category == CATEGORY_GAMMA) {
+            s = Gamma.settleOnLiquidate(
+                _states[symbolId],
+                _positions[symbolId][pTokenId],
+                IGamma.VarOnLiquidate(
                     symbolId,
                     pTokenId,
                     _getIndexPrice(symbolId),
