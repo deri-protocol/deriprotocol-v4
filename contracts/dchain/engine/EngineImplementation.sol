@@ -23,6 +23,7 @@ contract EngineImplementation is EngineStorage {
     error InsufficientMargin();
     error NoMaintenanceMarginRequired();
     error CanNotLiquidate();
+    error InvalidEventData();
 
     event ExecuteUpdateLiquidity(
         uint256 requestId,
@@ -127,6 +128,9 @@ contract EngineImplementation is EngineStorage {
         _verifyEventData(eventData, eventSig);
         oracle.updateOffchainValues(signatures);
         IEngine.VarOnUpdateLiquidity memory v = abi.decode(eventData, (IEngine.VarOnUpdateLiquidity));
+        if (eventData.length != 192 || (v.lTokenId >> 248) != 1) {
+            revert InvalidEventData();
+        }
         _updateUserRequestId(v.lTokenId, v.requestId);
         uint256 curLiquidity = _dStates[v.lTokenId].getInt(D_LIQUIDITY).itou();
         // Depends on liquidity change, call addLiquidity or removeLiquidity logic
@@ -141,6 +145,9 @@ contract EngineImplementation is EngineStorage {
         _verifyEventData(eventData, eventSig);
         oracle.updateOffchainValues(signatures);
         IEngine.VarOnRemoveMargin memory v = abi.decode(eventData, (IEngine.VarOnRemoveMargin));
+        if (eventData.length != 192 || (v.pTokenId >> 248) != 2) {
+            revert InvalidEventData();
+        }
         _updateUserRequestId(v.pTokenId, v.requestId);
         _removeMargin(v);
     }
@@ -166,6 +173,9 @@ contract EngineImplementation is EngineStorage {
         _verifyEventData(eventData, eventSig);
         oracle.updateOffchainValues(signatures);
         IEngine.VarOnLiquidate memory v = abi.decode(eventData, (IEngine.VarOnLiquidate));
+        if (eventData.length != 160) {
+            revert InvalidEventData();
+        }
         _updateUserRequestId(v.pTokenId, v.requestId);
         _liquidate(v);
     }
