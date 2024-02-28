@@ -573,6 +573,7 @@ contract GatewayImplementation is GatewayStorage {
      * @param signature The signature used to verify the event data.
      */
     function finishUpdateLiquidity(bytes memory eventData, bytes memory signature) external _reentryLock_ {
+        require(eventData.length == 196);
         _verifyEventData(eventData, signature);
         IGateway.VarOnExecuteUpdateLiquidity memory v = abi.decode(eventData, (IGateway.VarOnExecuteUpdateLiquidity));
         _checkRequestId(v.lTokenId, v.requestId);
@@ -622,6 +623,7 @@ contract GatewayImplementation is GatewayStorage {
      * @param signature The signature used to verify the event data.
      */
     function finishRemoveMargin(bytes memory eventData, bytes memory signature) external _reentryLock_ {
+        require(eventData.length == 160);
         _verifyEventData(eventData, signature);
         IGateway.VarOnExecuteRemoveMargin memory v = abi.decode(eventData, (IGateway.VarOnExecuteRemoveMargin));
         _checkRequestId(v.pTokenId, v.requestId);
@@ -657,6 +659,7 @@ contract GatewayImplementation is GatewayStorage {
      * @param signature The signature used to verify the event data.
      */
     function finishLiquidate(bytes memory eventData, bytes memory signature) external _reentryLock_ {
+        require(eventData.length == 96);
         _verifyEventData(eventData, signature);
         IGateway.VarOnExecuteLiquidate memory v = abi.decode(eventData, (IGateway.VarOnExecuteLiquidate));
 
