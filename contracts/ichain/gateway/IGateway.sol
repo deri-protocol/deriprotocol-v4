@@ -82,6 +82,12 @@ interface IGateway {
         int256  cumulativePnlOnEngine;
     }
 
+    struct VarOnExecuteCollectProtocolFee {
+        uint256 chainId;
+        uint256 cumulativeCollectedProtocolFeeOnEngine;
+        address recipient;
+    }
+
     function getGatewayState() external view returns (GatewayState memory s);
 
     function getBTokenState(address bToken) external view returns (BTokenState memory s);

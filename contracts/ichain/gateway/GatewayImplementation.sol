@@ -34,6 +34,11 @@ contract GatewayImplementation is GatewayStorage {
     error InsufficientB0();
     error InsufficientExecutionFee();
 
+    event RequestCollectProtocolFee(
+        uint256 chainId,
+        address recipient
+    );
+
     event RequestUpdateLiquidity(
         uint256 requestId,
         uint256 lTokenId,
@@ -115,6 +120,11 @@ contract GatewayImplementation is GatewayStorage {
         uint256 requestId,
         uint256 pTokenId,
         int256  lpPnl
+    );
+
+    event FinishCollectProtocolFee(
+        uint256 amount,
+        address recipient
     );
 
     uint256 constant UONE = 1e18;
@@ -292,6 +302,35 @@ contract GatewayImplementation is GatewayStorage {
     //================================================================================
     // Interactions
     //================================================================================
+
+    function requestCollectProtocolFee(address recipient) external _onlyAdmin_ {
+        emit RequestCollectProtocolFee(
+            block.chainid,
+            recipient
+        );
+    }
+
+    function finishCollectProtocolFee(bytes memory eventData, bytes memory signature) external {
+        require(eventData.length == 96);
+        _verifyEventData(eventData, signature);
+        IGateway.VarOnExecuteCollectProtocolFee memory v = abi.decode(eventData, (IGateway.VarOnExecuteCollectProtocolFee));
+        require(v.chainId == block.chainid);
+
+        uint256 cumulativeCollectedProtocolFeeOnGateway = _gatewayStates.getUint(I.S_CUMULATIVECOLLECTEDPROTOCOLFEE);
+        if (v.cumulativeCollectedProtocolFeeOnEngine > cumulativeCollectedProtocolFeeOnGateway) {
+            uint256 amount = (v.cumulativeCollectedProtocolFeeOnEngine - cumulativeCollectedProtocolFeeOnGateway).rescaleDown(18, decimalsB0);
+            if (amount > 0) {
+                amount = vault0.redeem(uint256(0), amount);
+                tokenB0.transferOut(v.recipient, amount);
+                cumulativeCollectedProtocolFeeOnGateway += amount.rescale(decimalsB0, 18);
+                _gatewayStates.set(I.S_CUMULATIVECOLLECTEDPROTOCOLFEE, cumulativeCollectedProtocolFeeOnGateway);
+                emit FinishCollectProtocolFee(
+                    amount,
+                    v.recipient
+                );
+            }
+        }
+    }
 
     /**
      * @notice Request to add liquidity with specified base token.
