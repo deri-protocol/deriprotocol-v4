@@ -283,7 +283,7 @@ contract GatewayImplementation is GatewayStorage {
     // Interactions
     //================================================================================
 
-    function finishCollectProtocolFee(bytes memory eventData, bytes memory signature) external {
+    function finishCollectProtocolFee(bytes memory eventData, bytes memory signature) external _onlyAdmin_ {
         require(eventData.length == 64);
         _verifyEventData(eventData, signature);
         IGateway.VarOnExecuteCollectProtocolFee memory v = abi.decode(eventData, (IGateway.VarOnExecuteCollectProtocolFee));
