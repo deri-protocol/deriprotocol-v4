@@ -17,6 +17,7 @@ interface IGateway {
         int256  liquidationRewardCutRatio;
         int256  minLiquidationReward;
         int256  maxLiquidationReward;
+        address protocolFeeManager;
     }
 
     struct GatewayState {
@@ -27,6 +28,7 @@ interface IGateway {
         uint256 gatewayRequestId;
         uint256 dChainExecutionFeePerRequest;
         uint256 totalIChainExecutionFee;
+        uint256 cumulativeCollectedProtocolFee;
     }
 
     struct BTokenState {
@@ -85,7 +87,6 @@ interface IGateway {
     struct VarOnExecuteCollectProtocolFee {
         uint256 chainId;
         uint256 cumulativeCollectedProtocolFeeOnEngine;
-        address recipient;
     }
 
     function getGatewayState() external view returns (GatewayState memory s);
