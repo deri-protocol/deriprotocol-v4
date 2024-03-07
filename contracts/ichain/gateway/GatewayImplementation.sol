@@ -34,10 +34,6 @@ contract GatewayImplementation is GatewayStorage {
     error InsufficientB0();
     error InsufficientExecutionFee();
 
-    event RequestCollectProtocolFee(
-        uint256 chainId
-    );
-
     event RequestUpdateLiquidity(
         uint256 requestId,
         uint256 lTokenId,
@@ -286,12 +282,6 @@ contract GatewayImplementation is GatewayStorage {
     //================================================================================
     // Interactions
     //================================================================================
-
-    function requestCollectProtocolFee() external _onlyAdmin_ {
-        emit RequestCollectProtocolFee(
-            block.chainid
-        );
-    }
 
     function finishCollectProtocolFee(bytes memory eventData, bytes memory signature) external {
         require(eventData.length == 64);

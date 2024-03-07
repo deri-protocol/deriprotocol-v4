@@ -84,10 +84,6 @@ interface IEngine {
         int256[] tradeParams;
     }
 
-    struct VarOnCollectProtocolFee {
-        uint256 chainId;
-    }
-
     function getEngineState() external view returns (EngineState memory s);
 
     function getChainState(uint88 chainId) external view returns (ChainState memory s);

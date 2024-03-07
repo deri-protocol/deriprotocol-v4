@@ -203,16 +203,10 @@ contract EngineImplementation is EngineStorage {
         _tradeAndRemoveMargin(v);
     }
 
-    function collectProtocolFee(bytes memory eventData, bytes memory eventSig) external _reentryLock_ {
-        _verifyEventData(eventData, eventSig);
-        if (eventData.length != 32) {
-            revert InvalidEventData();
-        }
-        IEngine.VarOnCollectProtocolFee memory v = abi.decode(eventData, (IEngine.VarOnCollectProtocolFee));
-
+    function collectProtocolFee(uint88 chainId) external _onlyAdmin_ {
         emit ExecuteCollectProtocolFee(
-            v.chainId,
-            _iStates[uint88(v.chainId)].getUint(I_PROTOCOLFEE)
+            uint256(chainId),
+            _iStates[chainId].getUint(I_PROTOCOLFEE)
         );
     }
 
