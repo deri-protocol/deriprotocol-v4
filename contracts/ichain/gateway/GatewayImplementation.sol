@@ -134,34 +134,23 @@ contract GatewayImplementation is GatewayStorage {
     int256   internal immutable liquidationRewardCutRatio;
     int256   internal immutable minLiquidationReward;
     int256   internal immutable maxLiquidationReward;
+    address  internal immutable protocolFeeManager;
 
-    constructor (
-        address lToken_,
-        address pToken_,
-        address oracle_,
-        address swapper_,
-        address vault0_,
-        address iou_,
-        address tokenB0_,
-        address dChainEventSigner_,
-        uint256 b0ReserveRatio_,
-        int256  liquidationRewardCutRatio_,
-        int256  minLiquidationReward_,
-        int256  maxLiquidationReward_
-    ) {
-        lToken = IDToken(lToken_);
-        pToken = IDToken(pToken_);
-        oracle = IOracle(oracle_);
-        swapper = ISwapper(swapper_);
-        vault0 = IVault(vault0_);
-        iou = IIOU(iou_);
-        tokenB0 = tokenB0_;
-        decimalsB0 = tokenB0_.decimals();
-        dChainEventSigner = dChainEventSigner_;
-        b0ReserveRatio = b0ReserveRatio_;
-        liquidationRewardCutRatio = liquidationRewardCutRatio_;
-        minLiquidationReward = minLiquidationReward_;
-        maxLiquidationReward = maxLiquidationReward_;
+    constructor (IGateway.GatewayParam memory p) {
+        lToken = IDToken(p.lToken);
+        pToken = IDToken(p.pToken);
+        oracle = IOracle(p.oracle);
+        swapper = ISwapper(p.swapper);
+        vault0 = IVault(p.vault0);
+        iou = IIOU(p.iou);
+        tokenB0 = p.tokenB0;
+        decimalsB0 = p.tokenB0.decimals();
+        dChainEventSigner = p.dChainEventSigner;
+        b0ReserveRatio = p.b0ReserveRatio;
+        liquidationRewardCutRatio = p.liquidationRewardCutRatio;
+        minLiquidationReward = p.minLiquidationReward;
+        maxLiquidationReward = p.maxLiquidationReward;
+        protocolFeeManager = p.protocolFeeManager;
     }
 
     //================================================================================
@@ -181,6 +170,7 @@ contract GatewayImplementation is GatewayStorage {
         p.liquidationRewardCutRatio = liquidationRewardCutRatio;
         p.minLiquidationReward = minLiquidationReward;
         p.maxLiquidationReward = maxLiquidationReward;
+        p.protocolFeeManager = protocolFeeManager;
     }
 
     function getGatewayState() external view returns (IGateway.GatewayState memory s) {
@@ -292,6 +282,21 @@ contract GatewayImplementation is GatewayStorage {
     //================================================================================
     // Interactions
     //================================================================================
+
+    function finishCollectProtocolFee(bytes memory eventData, bytes memory signature) external _onlyAdmin_ {
+        require(eventData.length == 64);
+        _verifyEventData(eventData, signature);
+        IGateway.VarOnExecuteCollectProtocolFee memory v = abi.decode(eventData, (IGateway.VarOnExecuteCollectProtocolFee));
+        require(v.chainId == block.chainid);
+
+        GatewayHelper.finishCollectProtocolFee(
+            _gatewayStates,
+            vault0,
+            tokenB0,
+            protocolFeeManager,
+            v.cumulativeCollectedProtocolFeeOnEngine
+        );
+    }
 
     /**
      * @notice Request to add liquidity with specified base token.

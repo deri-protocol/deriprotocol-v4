@@ -11,6 +11,7 @@ library GatewayIndex {
     uint8 constant S_GATEWAYREQUESTID             = 5; // Gateway request id
     uint8 constant S_DCHAINEXECUTIONFEEPERREQUEST = 6; // dChain execution fee for executing request on dChain
     uint8 constant S_TOTALICHAINEXECUTIONFEE      = 7; // Total iChain execution fee paid by all requests
+    uint8 constant S_CUMULATIVECOLLECTEDPROTOCOLFEE = 8; // Cumulative collected protocol fee on Gateway
 
     uint8 constant B_VAULT             = 1; // BToken vault address
     uint8 constant B_ORACLEID          = 2; // BToken oracle id

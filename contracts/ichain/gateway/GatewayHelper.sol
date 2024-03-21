@@ -10,12 +10,14 @@ import '../swapper/ISwapper.sol';
 import './IGateway.sol';
 import '../../library/Bytes32Map.sol';
 import '../../library/ETHAndERC20.sol';
+import '../../library/SafeMath.sol';
 import { GatewayIndex as I } from './GatewayIndex.sol';
 
 library GatewayHelper {
 
     using Bytes32Map for mapping(uint8 => bytes32);
     using ETHAndERC20 for address;
+    using SafeMath for uint256;
 
     error CannotDelBToken();
     error BTokenDupInitialize();
@@ -30,6 +32,10 @@ library GatewayHelper {
     event UpdateBToken(address bToken);
 
     event SetExecutionFee(uint256 actionId, uint256 executionFee);
+
+    event FinishCollectProtocolFee(
+        uint256 amount
+    );
 
     address constant tokenETH = address(1);
 
@@ -47,6 +53,7 @@ library GatewayHelper {
         s.gatewayRequestId = gatewayStates.getUint(I.S_GATEWAYREQUESTID);
         s.dChainExecutionFeePerRequest = gatewayStates.getUint(I.S_DCHAINEXECUTIONFEEPERREQUEST);
         s.totalIChainExecutionFee = gatewayStates.getUint(I.S_TOTALICHAINEXECUTIONFEE);
+        s.cumulativeCollectedProtocolFee = gatewayStates.getUint(I.S_CUMULATIVECOLLECTEDPROTOCOLFEE);
     }
 
     function getBTokenState(
@@ -242,6 +249,34 @@ library GatewayHelper {
             if (b0Redeemed > 0) {
                 iou.burn(to, b0Redeemed);
                 tokenB0.transferOut(to, b0Redeemed);
+            }
+        }
+    }
+
+
+    //================================================================================
+    // Interactions
+    //================================================================================
+
+    function finishCollectProtocolFee(
+        mapping(uint8 => bytes32) storage gatewayStates,
+        IVault vault0,
+        address tokenB0,
+        address protocolFeeManager,
+        uint256 cumulativeCollectedProtocolFeeOnEngine
+    ) external {
+        uint8 decimalsB0 = tokenB0.decimals();
+        uint256 cumulativeCollectedProtocolFeeOnGateway = gatewayStates.getUint(I.S_CUMULATIVECOLLECTEDPROTOCOLFEE);
+        if (cumulativeCollectedProtocolFeeOnEngine > cumulativeCollectedProtocolFeeOnGateway) {
+            uint256 amount = (cumulativeCollectedProtocolFeeOnEngine - cumulativeCollectedProtocolFeeOnGateway).rescaleDown(18, decimalsB0);
+            if (amount > 0) {
+                amount = vault0.redeem(uint256(0), amount);
+                tokenB0.transferOut(protocolFeeManager, amount);
+                cumulativeCollectedProtocolFeeOnGateway += amount.rescale(decimalsB0, 18);
+                gatewayStates.set(I.S_CUMULATIVECOLLECTEDPROTOCOLFEE, cumulativeCollectedProtocolFeeOnGateway);
+                emit FinishCollectProtocolFee(
+                    amount
+                );
             }
         }
     }

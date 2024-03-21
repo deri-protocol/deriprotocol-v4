@@ -48,6 +48,11 @@ contract EngineImplementation is EngineStorage {
         int256  cumulativePnlOnEngine
     );
 
+    event ExecuteCollectProtocolFee(
+        uint256 chainId,
+        uint256 cumulativeCollectedProtocolFeeOnEngine
+    );
+
     uint8 constant S_TOTALLIQUIDITY            = 1; // total liquidity
     uint8 constant S_LPSPNL                    = 2; // total lp's pnl
     uint8 constant S_CUMULATIVEPNLPERLIQUIDITY = 3; // cumulative pnl per liquidity
@@ -196,6 +201,13 @@ contract EngineImplementation is EngineStorage {
         ) = abi.decode(eventData, (uint256, uint256, uint256, int256, int256, uint256, bytes32, int256[]));
         _updateUserRequestId(v.pTokenId, v.requestId);
         _tradeAndRemoveMargin(v);
+    }
+
+    function collectProtocolFee(uint88 chainId) external _onlyAdmin_ {
+        emit ExecuteCollectProtocolFee(
+            uint256(chainId),
+            _iStates[chainId].getUint(I_PROTOCOLFEE)
+        );
     }
 
     //================================================================================
