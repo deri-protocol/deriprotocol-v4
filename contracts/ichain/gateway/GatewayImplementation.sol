@@ -664,7 +664,7 @@ contract GatewayImplementation is GatewayStorage {
      * @param signature The signature used to verify the event data.
      */
     function finishLiquidate(bytes memory eventData, bytes memory signature) external _reentryLock_ {
-        require(eventData.length == 96);
+        require(eventData.length == 128);
         _verifyEventData(eventData, signature);
         IGateway.VarOnExecuteLiquidate memory v = abi.decode(eventData, (IGateway.VarOnExecuteLiquidate));
 
@@ -676,19 +676,16 @@ contract GatewayImplementation is GatewayStorage {
 
         uint256 b0AmountIn;
 
-        // Redeem all bToken from vault and swap into B0
-        {
-            uint256 bAmount = IVault(data.vault).redeem(data.dTokenId, type(uint256).max);
-            if (data.bToken == tokenB0) {
-                b0AmountIn += bAmount;
-            } else if (data.bToken == tokenETH) {
-                (uint256 resultB0, ) = swapper.swapExactETHForB0{value:bAmount}();
-                b0AmountIn += resultB0;
-            } else {
-                (uint256 resultB0, ) = swapper.swapExactBXForB0(data.bToken, bAmount);
-                b0AmountIn += resultB0;
-            }
-        }
+        b0AmountIn = GatewayHelper.partialLiquidateRedeemAndSwap(
+            tokenB0,
+            decimalsB0,
+            data.bToken,
+            data.vault,
+            address(swapper),
+            data.dTokenId,
+            data.b0Amount,
+            v.maintenanceMarginRequired
+        );
 
         int256 lpPnl = b0AmountIn.utoi() + data.b0Amount; // All Lp's PNL by liquidating this trader
         int256 reward;

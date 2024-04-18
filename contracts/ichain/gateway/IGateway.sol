@@ -82,6 +82,7 @@ interface IGateway {
         uint256 requestId;
         uint256 pTokenId;
         int256  cumulativePnlOnEngine;
+        int256  maintenanceMarginRequired;
     }
 
     struct VarOnExecuteCollectProtocolFee {

@@ -18,6 +18,7 @@ library GatewayHelper {
     using Bytes32Map for mapping(uint8 => bytes32);
     using ETHAndERC20 for address;
     using SafeMath for uint256;
+    using SafeMath for int256;
 
     error CannotDelBToken();
     error BTokenDupInitialize();
@@ -279,6 +280,42 @@ library GatewayHelper {
                 );
             }
         }
+    }
+
+    function partialLiquidateRedeemAndSwap(
+        address tokenB0,
+        uint8 decimalsB0,
+        address bToken,
+        address vault,
+        address swapper,
+        uint256 dTokenId,
+        int256 b0Amount,
+        int256 maintenanceMarginRequired
+    ) external returns (uint256) {
+        uint256 b0AmountIn;
+
+        // partial liquidation, only swap need B0 to cover maintenanceMarginRequired
+        int256 requiredB0Amount = maintenanceMarginRequired.rescaleUp(18, decimalsB0) - b0Amount;
+        uint256 bAmount = IVault(vault).redeem(dTokenId, type(uint256).max);
+        if (requiredB0Amount > 0) {
+            if (bToken == tokenB0) {
+                b0AmountIn += bAmount;
+                bAmount = 0;
+            } else if (bToken == tokenETH) {
+                (uint256 resultB0, uint256 resultBX) = ISwapper(swapper).swapETHForExactB0{value:bAmount}(requiredB0Amount.itou());
+                b0AmountIn += resultB0;
+                bAmount -= resultBX;
+            } else {
+                (uint256 resultB0, uint256 resultBX) = ISwapper(swapper).swapBXForExactB0(bToken, requiredB0Amount.itou(), bAmount);
+                b0AmountIn += resultB0;
+                bAmount -= resultBX;
+            }
+        }
+        if (bAmount > 0) {
+            // send to claim contract
+        }
+
+        return b0AmountIn;
     }
 
 }
