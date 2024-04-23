@@ -283,7 +283,7 @@ library GatewayHelper {
         }
     }
 
-    function partialLiquidateRedeemAndSwap(
+    function liquidateRedeemAndSwap(
         address tokenB0,
         uint8 decimalsB0,
         address bToken,
@@ -297,7 +297,7 @@ library GatewayHelper {
     ) external returns (uint256) {
         uint256 b0AmountIn;
 
-        // partial liquidation, only swap needed B0 to cover maintenanceMarginRequired
+        // only swap needed B0 to cover maintenanceMarginRequired
         int256 requiredB0Amount = maintenanceMarginRequired.rescaleUp(18, decimalsB0) - b0Amount;
         uint256 bAmount = IVault(vault).redeem(pTokenId, type(uint256).max);
         if (bToken == tokenB0) {

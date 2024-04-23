@@ -679,7 +679,7 @@ contract GatewayImplementation is GatewayStorage {
 
         uint256 b0AmountIn;
 
-        b0AmountIn = GatewayHelper.partialLiquidateRedeemAndSwap(
+        b0AmountIn = GatewayHelper.liquidateRedeemAndSwap(
             tokenB0,
             decimalsB0,
             data.bToken,
