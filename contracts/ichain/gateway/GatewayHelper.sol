@@ -316,7 +316,7 @@ library GatewayHelper {
         }
         if (bAmount > 0) {
             bToken.transferOut(liqClaim, bAmount);
-            ILiqClaim(liqClaim).deposit(IDToken(pToken).ownerOf(pTokenId), bToken, bAmount);
+            ILiqClaim(liqClaim).registerDeposit(IDToken(pToken).ownerOf(pTokenId), bToken, bAmount);
         }
 
         return b0AmountIn;

@@ -13,7 +13,7 @@ interface ILiqClaim {
 
     function getTotalAmount(address bToken) external view returns (uint256);
 
-    function deposit(address owner, address bToken, uint256 amount) external;
+    function registerDeposit(address owner, address bToken, uint256 amount) external;
 
     function redeem() external;
 

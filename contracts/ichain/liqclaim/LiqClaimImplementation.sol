@@ -13,7 +13,7 @@ contract LiqClaimImplementation is LiqClaimStorage {
     using ETHAndERC20 for address;
     using EnumerableSet for EnumerableSet.AddressSet;
 
-    event Deposit(
+    event RegisterDeposit(
         address owner,
         address bToken,
         uint256 amount
@@ -41,8 +41,8 @@ contract LiqClaimImplementation is LiqClaimStorage {
         return _totalAmounts[bToken];
     }
 
-    // should transfer token before calling deposit
-    function deposit(address owner, address bToken, uint256 amount) external {
+    // should transfer token before calling registerDeposit
+    function registerDeposit(address owner, address bToken, uint256 amount) external {
         if (amount > 0) {
             require(
                 bToken.balanceOfThis() >= _totalAmounts[bToken] + amount,
@@ -55,7 +55,7 @@ contract LiqClaimImplementation is LiqClaimStorage {
             _claimableAmounts[owner][bToken] += amount;
             _totalAmounts[bToken] += amount;
 
-            emit Deposit(owner, bToken, amount);
+            emit RegisterDeposit(owner, bToken, amount);
         }
     }
 
