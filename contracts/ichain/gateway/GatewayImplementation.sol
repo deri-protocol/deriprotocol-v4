@@ -135,6 +135,7 @@ contract GatewayImplementation is GatewayStorage {
     int256   internal immutable minLiquidationReward;
     int256   internal immutable maxLiquidationReward;
     address  internal immutable protocolFeeManager;
+    address  internal immutable liqClaim;
 
     constructor (IGateway.GatewayParam memory p) {
         lToken = IDToken(p.lToken);
@@ -151,6 +152,7 @@ contract GatewayImplementation is GatewayStorage {
         minLiquidationReward = p.minLiquidationReward;
         maxLiquidationReward = p.maxLiquidationReward;
         protocolFeeManager = p.protocolFeeManager;
+        liqClaim = p.liqClaim;
     }
 
     //================================================================================
@@ -171,6 +173,7 @@ contract GatewayImplementation is GatewayStorage {
         p.minLiquidationReward = minLiquidationReward;
         p.maxLiquidationReward = maxLiquidationReward;
         p.protocolFeeManager = protocolFeeManager;
+        p.liqClaim = liqClaim;
     }
 
     function getGatewayState() external view returns (IGateway.GatewayState memory s) {
@@ -682,6 +685,8 @@ contract GatewayImplementation is GatewayStorage {
             data.bToken,
             data.vault,
             address(swapper),
+            liqClaim,
+            address(pToken),
             data.dTokenId,
             data.b0Amount,
             v.maintenanceMarginRequired

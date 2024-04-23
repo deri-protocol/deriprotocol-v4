@@ -8,6 +8,7 @@ import '../token/IIOU.sol';
 import '../../oracle/IOracle.sol';
 import '../swapper/ISwapper.sol';
 import './IGateway.sol';
+import '../liqclaim/ILiqClaim.sol';
 import '../../library/Bytes32Map.sol';
 import '../../library/ETHAndERC20.sol';
 import '../../library/SafeMath.sol';
@@ -288,20 +289,22 @@ library GatewayHelper {
         address bToken,
         address vault,
         address swapper,
-        uint256 dTokenId,
+        address liqClaim,
+        address pToken,
+        uint256 pTokenId,
         int256 b0Amount,
         int256 maintenanceMarginRequired
     ) external returns (uint256) {
         uint256 b0AmountIn;
 
-        // partial liquidation, only swap need B0 to cover maintenanceMarginRequired
+        // partial liquidation, only swap needed B0 to cover maintenanceMarginRequired
         int256 requiredB0Amount = maintenanceMarginRequired.rescaleUp(18, decimalsB0) - b0Amount;
-        uint256 bAmount = IVault(vault).redeem(dTokenId, type(uint256).max);
-        if (requiredB0Amount > 0) {
-            if (bToken == tokenB0) {
-                b0AmountIn += bAmount;
-                bAmount = 0;
-            } else if (bToken == tokenETH) {
+        uint256 bAmount = IVault(vault).redeem(pTokenId, type(uint256).max);
+        if (bToken == tokenB0) {
+            b0AmountIn += bAmount;
+            bAmount = 0;
+        } else if (requiredB0Amount > 0) {
+            if (bToken == tokenETH) {
                 (uint256 resultB0, uint256 resultBX) = ISwapper(swapper).swapETHForExactB0{value:bAmount}(requiredB0Amount.itou());
                 b0AmountIn += resultB0;
                 bAmount -= resultBX;
@@ -312,7 +315,8 @@ library GatewayHelper {
             }
         }
         if (bAmount > 0) {
-            // send to claim contract
+            bToken.transferOut(liqClaim, bAmount);
+            ILiqClaim(liqClaim).deposit(IDToken(pToken).ownerOf(pTokenId), bToken, bAmount);
         }
 
         return b0AmountIn;

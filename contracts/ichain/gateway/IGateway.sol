@@ -18,6 +18,7 @@ interface IGateway {
         int256  minLiquidationReward;
         int256  maxLiquidationReward;
         address protocolFeeManager;
+        address liqClaim;
     }
 
     struct GatewayState {

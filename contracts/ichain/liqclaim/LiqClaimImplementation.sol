@@ -2,6 +2,7 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
+import './ILiqClaim.sol';
 import '../token/IDToken.sol';
 import './LiqClaimStorage.sol';
 import '@openzeppelin/contracts/utils/structs/EnumerableSet.sol';
@@ -18,25 +19,44 @@ contract LiqClaimImplementation is LiqClaimStorage {
         uint256 amount
     );
 
-    event Claim(
+    event Redeem(
         address owner,
         address bToken,
         uint256 amount
     );
 
+    function getClaimables(address owner) external view returns (ILiqClaim.Claimable[] memory) {
+        uint256 length = _claimableTokens[owner].length();
+        ILiqClaim.Claimable[] memory res = new ILiqClaim.Claimable[](length);
+        for (uint256 i = 0; i < length; i++) {
+            address bToken = _claimableTokens[owner].at(i);
+            uint256 amount = _claimableAmounts[owner][bToken];
+            res[i].bToken = bToken;
+            res[i].amount = amount;
+        }
+        return res;
+    }
+
+    function getTotalAmount(address bToken) external view returns (uint256) {
+        return _totalAmounts[bToken];
+    }
+
     // should transfer token before calling deposit
     function deposit(address owner, address bToken, uint256 amount) external {
-        uint256 preBalance = _totalAmounts[bToken];
-        uint256 curBalance =  bToken.balanceOfThis();
-        require(curBalance >= preBalance + amount, 'Wrong amount');
+        if (amount > 0) {
+            require(
+                bToken.balanceOfThis() >= _totalAmounts[bToken] + amount,
+                'Wrong amount'
+            );
 
-        if (preBalance == 0) {
-            _claimableTokens[owner].add(bToken);
+            if (_claimableAmounts[owner][bToken] == 0) {
+                _claimableTokens[owner].add(bToken);
+            }
+            _claimableAmounts[owner][bToken] += amount;
+            _totalAmounts[bToken] += amount;
+
+            emit Deposit(owner, bToken, amount);
         }
-        _claimableAmounts[owner][bToken] += amount;
-        _totalAmounts[bToken] += amount;
-
-        emit Deposit(owner, bToken, amount);
     }
 
     function redeem() external {
@@ -44,10 +64,11 @@ contract LiqClaimImplementation is LiqClaimStorage {
         for (uint256 i = length; i > 0; i--) {
             address bToken = _claimableTokens[msg.sender].at(i-1);
             uint256 amount = _claimableAmounts[msg.sender][bToken];
-            bToken.transferOut(msg.sender, amount);
             _claimableTokens[msg.sender].remove(bToken);
-            delete _claimableAmounts[msg.sender][bToken];
-            emit Claim(msg.sender, bToken, amount);
+            _claimableAmounts[msg.sender][bToken] = 0;
+            _totalAmounts[bToken] -= amount;
+            bToken.transferOut(msg.sender, amount);
+            emit Redeem(msg.sender, bToken, amount);
         }
     }
 
