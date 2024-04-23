@@ -679,18 +679,24 @@ contract GatewayImplementation is GatewayStorage {
 
         uint256 b0AmountIn;
 
-        b0AmountIn = GatewayHelper.liquidateRedeemAndSwap(
-            tokenB0,
-            decimalsB0,
-            data.bToken,
-            data.vault,
-            address(swapper),
-            liqClaim,
-            address(pToken),
-            data.dTokenId,
-            data.b0Amount,
-            v.maintenanceMarginRequired
-        );
+        {
+            uint256 bAmount = IVault(data.vault).redeem(data.dTokenId, type(uint256).max);
+            if (data.bToken == tokenB0) {
+                b0AmountIn += bAmount;
+            } else {
+                b0AmountIn += GatewayHelper.liquidateRedeemAndSwap(
+                    decimalsB0,
+                    data.bToken,
+                    address(swapper),
+                    liqClaim,
+                    address(pToken),
+                    data.dTokenId,
+                    data.b0Amount,
+                    bAmount,
+                    v.maintenanceMarginRequired
+                );
+            }
+        }
 
         int256 lpPnl = b0AmountIn.utoi() + data.b0Amount; // All Lp's PNL by liquidating this trader
         int256 reward;

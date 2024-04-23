@@ -284,26 +284,21 @@ library GatewayHelper {
     }
 
     function liquidateRedeemAndSwap(
-        address tokenB0,
         uint8 decimalsB0,
         address bToken,
-        address vault,
         address swapper,
         address liqClaim,
         address pToken,
         uint256 pTokenId,
         int256 b0Amount,
+        uint256 bAmount,
         int256 maintenanceMarginRequired
     ) external returns (uint256) {
         uint256 b0AmountIn;
 
         // only swap needed B0 to cover maintenanceMarginRequired
         int256 requiredB0Amount = maintenanceMarginRequired.rescaleUp(18, decimalsB0) - b0Amount;
-        uint256 bAmount = IVault(vault).redeem(pTokenId, type(uint256).max);
-        if (bToken == tokenB0) {
-            b0AmountIn += bAmount;
-            bAmount = 0;
-        } else if (requiredB0Amount > 0) {
+        if (requiredB0Amount > 0) {
             if (bToken == tokenETH) {
                 (uint256 resultB0, uint256 resultBX) = ISwapper(swapper).swapETHForExactB0{value:bAmount}(requiredB0Amount.itou());
                 b0AmountIn += resultB0;
