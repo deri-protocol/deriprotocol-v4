@@ -18,6 +18,7 @@ interface IGateway {
         int256  minLiquidationReward;
         int256  maxLiquidationReward;
         address protocolFeeManager;
+        address liqClaim;
     }
 
     struct GatewayState {
@@ -82,6 +83,7 @@ interface IGateway {
         uint256 requestId;
         uint256 pTokenId;
         int256  cumulativePnlOnEngine;
+        int256  maintenanceMarginRequired;
     }
 
     struct VarOnExecuteCollectProtocolFee {

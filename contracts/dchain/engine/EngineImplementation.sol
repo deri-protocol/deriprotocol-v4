@@ -45,7 +45,8 @@ contract EngineImplementation is EngineStorage {
     event ExecuteLiquidate(
         uint256 requestId,
         uint256 pTokenId,
-        int256  cumulativePnlOnEngine
+        int256  cumulativePnlOnEngine,
+        int256  maintenanceMarginRequired
     );
 
     event ExecuteCollectProtocolFee(
@@ -424,7 +425,8 @@ contract EngineImplementation is EngineStorage {
         emit ExecuteLiquidate(
             v.requestId,
             v.pTokenId,
-            data.cumulativePnl
+            data.cumulativePnl,
+            s.traderMaintenanceMarginRequired
         );
     }
 
