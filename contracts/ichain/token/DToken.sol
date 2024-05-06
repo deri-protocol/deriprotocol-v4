@@ -17,7 +17,7 @@ contract DToken is ERC721 {
 
     // Encoding of dTokenId
     // To ensure uniqueness across all DToken contracts on different chains, we encode the dTokenId as follows:
-    // 1. The highest 8 bits: A unique identifier distinguishing between different DToken contracts deployed on the same chain.
+    // 1. The highest 8 bits: A unique identifier distinguishing between different DToken contracts deployed on the same chain. Using odd/even to distinguish lToken and pToken, for example: 1/2 for a lToken/pToken pair, and 3/4 for another lToken/pToken pair belongs to different pool.
     // 2. The next 88 bits: Reserved for the chainId, differentiating DToken contracts deployed on various chains.
     // 3. The lowest 160 bits: Used to distinguish individual dTokens minted within a specific contract.
     // The highest 96 bits remain fixed at deployment and are stored in BASE_TOKENID.
