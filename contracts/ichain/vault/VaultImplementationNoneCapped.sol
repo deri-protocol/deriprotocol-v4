@@ -63,7 +63,7 @@ contract VaultImplementationNoneCapped is VaultStorage {
     }
 
     function isTrader(uint256 dTokenId) public pure returns (bool) {
-        return dTokenId >= (2 << 248);
+        return ((dTokenId >> 248) % 2) == 0;
     }
 
     /**
