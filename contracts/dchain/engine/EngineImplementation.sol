@@ -134,7 +134,7 @@ contract EngineImplementation is EngineStorage {
         _verifyEventData(eventData, eventSig);
         oracle.updateOffchainValues(signatures);
         IEngine.VarOnUpdateLiquidity memory v = abi.decode(eventData, (IEngine.VarOnUpdateLiquidity));
-        if (eventData.length != 192 || (v.lTokenId >> 248) != 1) {
+        if (eventData.length != 192 || ((v.lTokenId >> 248) % 2) != 1) {
             revert InvalidEventData();
         }
         _updateUserRequestId(v.lTokenId, v.requestId);
@@ -151,7 +151,7 @@ contract EngineImplementation is EngineStorage {
         _verifyEventData(eventData, eventSig);
         oracle.updateOffchainValues(signatures);
         IEngine.VarOnRemoveMargin memory v = abi.decode(eventData, (IEngine.VarOnRemoveMargin));
-        if (eventData.length != 192 || (v.pTokenId >> 248) != 2) {
+        if (eventData.length != 192 || ((v.pTokenId >> 248) % 2) != 0) {
             revert InvalidEventData();
         }
         _updateUserRequestId(v.pTokenId, v.requestId);
