@@ -22,6 +22,7 @@ library Futures {
     error StartingPriceShiftExceedsLimit();
 
     event UpdateFuturesParameter(bytes32 symbolId);
+    event RemoveFutures(bytes32 symbolId);
     event SettleFuturesOnAddLiquidity(
         bytes32 indexed symbolId,
         IFutures.EventDataOnAddLiquidity data
@@ -152,6 +153,20 @@ library Futures {
     ) external {
         state.set(parameterId, value);
         emit UpdateFuturesParameter(symbolId);
+    }
+
+    function removeSymbol(bytes32 symbolId, mapping(uint8 => bytes32) storage state) external {
+        require(state.getInt(S_OPENVOLUME) == 0, 'Have position');
+        state.set(S_PRICEID, bytes32(0));
+        state.set(S_FUNDINGPERIOD, bytes32(0));
+        state.set(S_MINTRADEVOLUME, bytes32(0));
+        state.set(S_ALPHA, bytes32(0));
+        state.set(S_FEERATIO, bytes32(0));
+        state.set(S_INITIALMARGINRATIO, bytes32(0));
+        state.set(S_MAINTENANCEMARGINRATIO, bytes32(0));
+        state.set(S_STARTINGPRICESHIFTLIMIT, bytes32(0));
+        state.set(S_ISCLOSEONLY, true);
+        emit RemoveFutures(symbolId);
     }
 
     //================================================================================

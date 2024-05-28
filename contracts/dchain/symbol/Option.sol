@@ -23,6 +23,7 @@ library Option {
     error StartingPriceShiftExceedsLimit();
 
     event UpdateOptionParameter(bytes32 symbolId);
+    event RemoveOption(bytes32 symbolId);
     event SettleOptionOnAddLiquidity(
         bytes32 indexed symbolId,
         IOption.EventDataOnAddLiquidity data
@@ -170,6 +171,25 @@ library Option {
     ) external {
         state.set(parameterId, value);
         emit UpdateOptionParameter(symbolId);
+    }
+
+    function removeSymbol(bytes32 symbolId, mapping(uint8 => bytes32) storage state) external {
+        require(state.getInt(S_OPENVOLUME) == 0, 'Have position');
+        state.set(S_PRICEID, bytes32(0));
+        state.set(S_VOLATILITYID, bytes32(0));
+        state.set(S_STRIKEPRICE, bytes32(0));
+        state.set(S_FUNDINGPERIOD, bytes32(0));
+        state.set(S_MINTRADEVOLUME, bytes32(0));
+        state.set(S_ALPHA, bytes32(0));
+        state.set(S_FEERATIONOTIONAL, bytes32(0));
+        state.set(S_FEERATIOMARK, bytes32(0));
+        state.set(S_INITIALMARGINRATIO, bytes32(0));
+        state.set(S_MAINTENANCEMARGINRATIO, bytes32(0));
+        state.set(S_MININITIALMARGINRATIO, bytes32(0));
+        state.set(S_STARTINGPRICESHIFTLIMIT, bytes32(0));
+        state.set(S_ISCALL, bytes32(0));
+        state.set(S_ISCLOSEONLY, true);
+        emit RemoveOption(symbolId);
     }
 
     //================================================================================
