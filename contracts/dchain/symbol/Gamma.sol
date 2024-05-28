@@ -21,6 +21,7 @@ library Gamma {
     error MarkExceedsLimit();
 
     event UpdateGammaParameter(bytes32 symbolId);
+    event RemoveGamma(bytes32 symbolId);
     event SettleGammaOnAddLiquidity(
         bytes32 indexed symbolId,
         IGamma.EventDataOnAddLiquidity data
@@ -163,6 +164,28 @@ library Gamma {
     ) external {
         state.set(parameterId, value);
         emit UpdateGammaParameter(symbolId);
+    }
+
+    function removeSymbol(bytes32 symbolId, mapping(uint8 => bytes32) storage state) external {
+        require(
+            state.getInt(S_NETPOWERVOLUME) == 0 &&
+            state.getInt(S_NETREALFUTURESVOLUME) == 0 &&
+            state.getInt(S_NETCOST) == 0 &&
+            state.getInt(S_INITIALMARGINREQUIRED) == 0,
+            'Have position'
+        );
+        state.set(S_PRICEID, bytes32(0));
+        state.set(S_VOLATILITYID, bytes32(0));
+        state.set(S_FUNDINGPERIOD, bytes32(0));
+        state.set(S_MINTRADEVOLUME, bytes32(0));
+        state.set(S_POWERALPHA, bytes32(0));
+        state.set(S_FUTURESALPHA, bytes32(0));
+        state.set(S_POWERFEERATIO, bytes32(0));
+        state.set(S_FUTURESFEERATIO, bytes32(0));
+        state.set(S_INITIALMARGINRATIO, bytes32(0));
+        state.set(S_MAINTENANCEMARGINRATIO, bytes32(0));
+        state.set(S_ISCLOSEONLY, true);
+        emit RemoveGamma(symbolId);
     }
 
     //================================================================================

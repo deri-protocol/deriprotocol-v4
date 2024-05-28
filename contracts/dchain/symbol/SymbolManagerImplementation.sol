@@ -131,6 +131,25 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
         }
     }
 
+    function removeSymbol(bytes32 symbolId) external _onlyAdmin_ {
+        require(_symbolIds.contains(symbolId), 'Not Exist');
+        require(_pTokenIds[symbolId].length() == 0, 'Have pToken');
+
+        _symbolIds.remove(symbolId);
+
+        mapping(uint8 => bytes32) storage state = _states[symbolId];
+        uint8 category = getCategory(symbolId);
+        if (category == CATEGORY_FUTURES) {
+            Futures.removeSymbol(symbolId, state);
+        } else if (category == CATEGORY_OPTION) {
+            Option.removeSymbol(symbolId, state);
+        } else if (category == CATEGORY_POWER) {
+            Power.removeSymbol(symbolId, state);
+        } else if (category == CATEGORY_GAMMA) {
+            Gamma.removeSymbol(symbolId, state);
+        }
+    }
+
     function setParameterOfId(string memory symbol, uint8 category, uint8 parameterId, bytes32 value) external _onlyAdmin_ {
         bytes32 symbolId = getSymbolId(symbol, category);
         mapping(uint8 => bytes32) storage state = _states[symbolId];
