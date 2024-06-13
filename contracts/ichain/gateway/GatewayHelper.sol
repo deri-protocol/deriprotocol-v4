@@ -12,6 +12,7 @@ import '../liqclaim/ILiqClaim.sol';
 import '../../library/Bytes32Map.sol';
 import '../../library/ETHAndERC20.sol';
 import '../../library/SafeMath.sol';
+import '@openzeppelin/contracts/utils/cryptography/ECDSA.sol';
 import { GatewayIndex as I } from './GatewayIndex.sol';
 
 library GatewayHelper {
@@ -26,6 +27,7 @@ library GatewayHelper {
     error BTokenNoSwapper();
     error BTokenNoOracle();
     error InvalidBToken();
+    error InvalidSignature();
 
     event AddBToken(address bToken, address vault, bytes32 oracleId, uint256 collateralFactor);
 
@@ -39,6 +41,7 @@ library GatewayHelper {
         uint256 amount
     );
 
+    uint256 constant UONE = 1e18;
     address constant tokenETH = address(1);
 
     //================================================================================
@@ -100,6 +103,31 @@ library GatewayHelper {
         s.singlePosition = dTokenStates[pTokenId].getBool(I.D_SINGLEPOSITION);
         s.lastRequestIChainExecutionFee = dTokenStates[pTokenId].getUint(I.D_LASTREQUESTICHAINEXECUTIONFEE);
         s.cumulativeUnusedIChainExecutionFee = dTokenStates[pTokenId].getUint(I.D_CUMULATIVEUNUSEDICHAINEXECUTIONFEE);
+    }
+
+    function getCumulativeTime(
+        mapping(uint8 => bytes32) storage gatewayStates,
+        mapping(uint256 => mapping(uint8 => bytes32)) storage dTokenStates,
+        uint256 lTokenId
+    ) external view returns (uint256 cumulativeTimePerLiquidity, uint256 cumulativeTime)
+    {
+        uint256 liquidityTime = gatewayStates.getUint(I.S_LIQUIDITYTIME);
+        uint256 totalLiquidity = gatewayStates.getUint(I.S_TOTALLIQUIDITY);
+        cumulativeTimePerLiquidity = gatewayStates.getUint(I.S_CUMULATIVETIMEPERLIQUIDITY);
+        uint256 liquidity = dTokenStates[lTokenId].getUint(I.D_LIQUIDITY);
+        cumulativeTime = dTokenStates[lTokenId].getUint(I.D_CUMULATIVETIME);
+        uint256 lastCumulativeTimePerLiquidity = dTokenStates[lTokenId].getUint(I.D_LASTCUMULATIVETIMEPERLIQUIDITY);
+
+        if (totalLiquidity != 0) {
+            uint256 diff1 = (block.timestamp - liquidityTime) * UONE * UONE / totalLiquidity;
+            unchecked { cumulativeTimePerLiquidity += diff1; }
+
+            if (liquidity != 0) {
+                uint256 diff2;
+                unchecked { diff2 = cumulativeTimePerLiquidity - lastCumulativeTimePerLiquidity; }
+                cumulativeTime += diff2 * liquidity / UONE;
+            }
+        }
     }
 
     function getExecutionFees(mapping(uint256 => uint256) storage executionFees)
@@ -252,6 +280,19 @@ library GatewayHelper {
                 iou.burn(to, b0Redeemed);
                 tokenB0.transferOut(to, b0Redeemed);
             }
+        }
+    }
+
+    function verifyEventData(
+        bytes memory eventData,
+        bytes memory signature,
+        uint256 eventDataLength,
+        address dChainEventSigner
+    ) external pure {
+        require(eventData.length == eventDataLength, 'Wrong eventData length');
+        bytes32 hash = ECDSA.toEthSignedMessageHash(keccak256(eventData));
+        if (ECDSA.recover(hash, signature) != dChainEventSigner) {
+            revert InvalidSignature();
         }
     }
 

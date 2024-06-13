@@ -8,7 +8,6 @@ import '../token/IDToken.sol';
 import '../token/IIOU.sol';
 import '../../oracle/IOracle.sol';
 import '../swapper/ISwapper.sol';
-import '@openzeppelin/contracts/utils/cryptography/ECDSA.sol';
 import '../../library/Bytes32Map.sol';
 import '../../library/ETHAndERC20.sol';
 import '../../library/SafeMath.sol';
@@ -30,7 +29,6 @@ contract GatewayImplementation is GatewayStorage {
     error InvalidPTokenId();
     error InvalidRequestId();
     error InsufficientMargin();
-    error InvalidSignature();
     error InsufficientB0();
     error InsufficientExecutionFee();
 
@@ -196,23 +194,7 @@ contract GatewayImplementation is GatewayStorage {
     function getCumulativeTime(uint256 lTokenId)
     public view returns (uint256 cumulativeTimePerLiquidity, uint256 cumulativeTime)
     {
-        uint256 liquidityTime = _gatewayStates.getUint(I.S_LIQUIDITYTIME);
-        uint256 totalLiquidity = _gatewayStates.getUint(I.S_TOTALLIQUIDITY);
-        cumulativeTimePerLiquidity = _gatewayStates.getUint(I.S_CUMULATIVETIMEPERLIQUIDITY);
-        uint256 liquidity = _dTokenStates[lTokenId].getUint(I.D_LIQUIDITY);
-        cumulativeTime = _dTokenStates[lTokenId].getUint(I.D_CUMULATIVETIME);
-        uint256 lastCumulativeTimePerLiquidity = _dTokenStates[lTokenId].getUint(I.D_LASTCUMULATIVETIMEPERLIQUIDITY);
-
-        if (totalLiquidity != 0) {
-            uint256 diff1 = (block.timestamp - liquidityTime) * UONE * UONE / totalLiquidity;
-            unchecked { cumulativeTimePerLiquidity += diff1; }
-
-            if (liquidity != 0) {
-                uint256 diff2;
-                unchecked { diff2 = cumulativeTimePerLiquidity - lastCumulativeTimePerLiquidity; }
-                cumulativeTime += diff2 * liquidity / UONE;
-            }
-        }
+        return GatewayHelper.getCumulativeTime(_gatewayStates, _dTokenStates, lTokenId);
     }
 
     function getExecutionFees() public view returns (uint256[] memory fees) {
@@ -287,8 +269,7 @@ contract GatewayImplementation is GatewayStorage {
     //================================================================================
 
     function finishCollectProtocolFee(bytes memory eventData, bytes memory signature) external _onlyAdmin_ {
-        require(eventData.length == 64);
-        _verifyEventData(eventData, signature);
+        GatewayHelper.verifyEventData(eventData, signature, 64, dChainEventSigner);
         IGateway.VarOnExecuteCollectProtocolFee memory v = abi.decode(eventData, (IGateway.VarOnExecuteCollectProtocolFee));
         require(v.chainId == block.chainid);
 
@@ -581,8 +562,7 @@ contract GatewayImplementation is GatewayStorage {
      * @param signature The signature used to verify the event data.
      */
     function finishUpdateLiquidity(bytes memory eventData, bytes memory signature) external _reentryLock_ {
-        require(eventData.length == 192);
-        _verifyEventData(eventData, signature);
+        GatewayHelper.verifyEventData(eventData, signature, 192, dChainEventSigner);
         IGateway.VarOnExecuteUpdateLiquidity memory v = abi.decode(eventData, (IGateway.VarOnExecuteUpdateLiquidity));
         _checkRequestId(v.lTokenId, v.requestId);
 
@@ -631,8 +611,7 @@ contract GatewayImplementation is GatewayStorage {
      * @param signature The signature used to verify the event data.
      */
     function finishRemoveMargin(bytes memory eventData, bytes memory signature) external _reentryLock_ {
-        require(eventData.length == 160);
-        _verifyEventData(eventData, signature);
+        GatewayHelper.verifyEventData(eventData, signature, 160, dChainEventSigner);
         IGateway.VarOnExecuteRemoveMargin memory v = abi.decode(eventData, (IGateway.VarOnExecuteRemoveMargin));
         _checkRequestId(v.pTokenId, v.requestId);
 
@@ -667,8 +646,7 @@ contract GatewayImplementation is GatewayStorage {
      * @param signature The signature used to verify the event data.
      */
     function finishLiquidate(bytes memory eventData, bytes memory signature) external _reentryLock_ {
-        require(eventData.length == 128);
-        _verifyEventData(eventData, signature);
+        GatewayHelper.verifyEventData(eventData, signature, 128, dChainEventSigner);
         IGateway.VarOnExecuteLiquidate memory v = abi.decode(eventData, (IGateway.VarOnExecuteLiquidate));
 
         // Cumulate unsettled PNL to b0Amount
@@ -966,6 +944,7 @@ contract GatewayImplementation is GatewayStorage {
      * @return bAmount The amount of tokens actually transferred.
      */
     function _transferOut(Data memory data, uint256 bAmountOut, bool isTd) internal returns (uint256 bAmount) {
+        uint256 minSwapB0Amount = 10 ** (decimalsB0 - 2); // min swap b0Amount of 0.01 USDC
         bAmount = bAmountOut;
 
         // Handle redemption of additional tokens to cover a negative B0 amount.
@@ -1018,14 +997,20 @@ contract GatewayImplementation is GatewayStorage {
                     b0Fill = bAmount;
                     bAmount = 0;
                 }
-            } else if (data.bToken == tokenETH) {
-                (uint256 resultB0, uint256 resultBX) = swapper.swapETHForExactB0{value: bAmount}(owe);
-                b0Fill = resultB0;
-                bAmount -= resultBX;
             } else {
-                (uint256 resultB0, uint256 resultBX) = swapper.swapBXForExactB0(data.bToken, owe, bAmount);
-                b0Fill = resultB0;
-                bAmount -= resultBX;
+                // let owe equals to minSwapB0Amount if small, otherwise swap may fail
+                if (owe < minSwapB0Amount) {
+                    owe = minSwapB0Amount;
+                }
+                if (data.bToken == tokenETH) {
+                    (uint256 resultB0, uint256 resultBX) = swapper.swapETHForExactB0{value: bAmount}(owe);
+                    b0Fill = resultB0;
+                    bAmount -= resultBX;
+                } else {
+                    (uint256 resultB0, uint256 resultBX) = swapper.swapBXForExactB0(data.bToken, owe, bAmount);
+                    b0Fill = resultB0;
+                    bAmount -= resultBX;
+                }
             }
             b0AmountIn += b0Fill;
             data.b0Amount += b0Fill.utoi();
@@ -1080,6 +1065,9 @@ contract GatewayImplementation is GatewayStorage {
                 // Swap B0 into BX for Lp
                 if (data.bToken == tokenB0) {
                     bAmount += b0AmountOut;
+                } else if (b0AmountOut < minSwapB0Amount) {
+                    // cannot swap such small amount of B0, cumulate it into cumulativePnlOnGateway
+                    data.cumulativePnlOnGateway = data.cumulativePnlOnGateway.addUnchecked(b0AmountOut.utoi().rescale(decimalsB0, 18));
                 } else if (data.bToken == tokenETH) {
                     (, uint256 resultBX) = swapper.swapExactB0ForETH(b0AmountOut);
                     bAmount += resultBX;
@@ -1115,13 +1103,6 @@ contract GatewayImplementation is GatewayStorage {
         _dTokenStates[lTokenId].set(I.D_LIQUIDITY, newLiquidity);
         _dTokenStates[lTokenId].set(I.D_CUMULATIVETIME, cumulativeTime);
         _dTokenStates[lTokenId].set(I.D_LASTCUMULATIVETIMEPERLIQUIDITY, cumulativeTimePerLiquidity);
-    }
-
-    function _verifyEventData(bytes memory eventData, bytes memory signature) internal view {
-        bytes32 hash = ECDSA.toEthSignedMessageHash(keccak256(eventData));
-        if (ECDSA.recover(hash, signature) != dChainEventSigner) {
-            revert InvalidSignature();
-        }
     }
 
 }
