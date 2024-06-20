@@ -302,6 +302,23 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
         }
     }
 
+    function settleSymbolOnForceClose(bytes32 symbolId, uint256 pTokenId, int256 liquidity)
+    external _onlyEngine_ returns (ISymbolManager.SettlementOnTrade memory ss)
+    {
+        ISymbol.SettlementOnForceClose memory s2 = _settleOnForceClose(symbolId, pTokenId, liquidity);
+
+        ss.funding = s2.funding;
+        ss.diffTradersPnl = s2.diffTradersPnl;
+        ss.traderFunding = s2.traderFunding;
+        ss.tradeRealizedCost = s2.tradeRealizedCost;
+
+        initialMarginRequired += s2.diffInitialMarginRequired;
+        ss.initialMarginRequired = initialMarginRequired;
+
+        _pTokenIds[symbolId].remove(pTokenId);
+        _tdSymbolIds[pTokenId].remove(symbolId);
+    }
+
     function settleSymbolsOnLiquidate(uint256 pTokenId, int256 liquidity)
     external _onlyEngine_ returns (ISymbolManager.SettlementOnLiquidate memory ss)
     {
@@ -587,6 +604,61 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
                     tradeParams[1], // entryPrice
                     tradeParams[2], // powerPriceLimit
                     tradeParams[3]  // futuresPriceLimit
+                )
+            );
+        }
+    }
+
+    function _settleOnForceClose(bytes32 symbolId, uint256 pTokenId, int256 liquidity)
+    internal returns (ISymbol.SettlementOnForceClose memory s)
+    {
+        uint8 category = getCategory(symbolId);
+
+        if (category == CATEGORY_FUTURES) {
+            s = Futures.settleOnForceClose(
+                _states[symbolId],
+                _positions[symbolId][pTokenId],
+                IFutures.VarOnForceClose(
+                    symbolId,
+                    pTokenId,
+                    _getIndexPrice(symbolId),
+                    liquidity
+                )
+            );
+        } else if (category == CATEGORY_OPTION) {
+            s = Option.settleOnForceClose(
+                _states[symbolId],
+                _positions[symbolId][pTokenId],
+                IOption.VarOnForceClose(
+                    symbolId,
+                    pTokenId,
+                    _getIndexPrice(symbolId),
+                    _getVolatility(symbolId),
+                    liquidity
+                )
+            );
+        } else if (category == CATEGORY_POWER) {
+            s = Power.settleOnForceClose(
+                _states[symbolId],
+                _positions[symbolId][pTokenId],
+                IPower.VarOnForceClose(
+                    symbolId,
+                    pTokenId,
+                    _getIndexPrice(symbolId),
+                    _getVolatility(symbolId),
+                    liquidity
+                )
+            );
+        } else if (category == CATEGORY_GAMMA) {
+            s = Gamma.settleOnForceClose(
+                _states[symbolId],
+                _positions[symbolId][pTokenId],
+                IGamma.VarOnForceClose(
+                    symbolId,
+                    pTokenId,
+                    _getIndexPrice(symbolId),
+                    _getVolatility(symbolId),
+                    liquidity
                 )
             );
         }

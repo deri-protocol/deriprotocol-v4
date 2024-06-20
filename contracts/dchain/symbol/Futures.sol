@@ -20,6 +20,7 @@ library Futures {
     error MarkExceedsLimit();
     error OpenInterestExceedsLimit();
     error StartingPriceShiftExceedsLimit();
+    error NoVolumeToForceClose();
 
     event UpdateFuturesParameter(bytes32 symbolId);
     event RemoveFutures(bytes32 symbolId);
@@ -45,6 +46,11 @@ library Futures {
         bytes32 indexed symbolId,
         uint256 indexed pTokenId,
         IFutures.EventDataOnLiquidate data
+    );
+    event SettleFuturesOnForceClose(
+        bytes32 indexed symbolId,
+        uint256 indexed pTokenId,
+        IFutures.EventDataOnForceClose data
     );
 
     // parameters
@@ -406,6 +412,70 @@ library Futures {
             traderInitialMarginRequired: s.traderInitialMarginRequired,
             tradeCost: s.tradeCost,
             tradeFee: s.tradeFee,
+            tradeRealizedCost: s.tradeRealizedCost
+        }));
+    }
+
+    function settleOnForceClose(
+        mapping(uint8 => bytes32) storage state,
+        mapping(uint8 => bytes32) storage position,
+        IFutures.VarOnForceClose memory v
+    ) external returns (IFutures.SettlementOnForceClose memory s)
+    {
+        Data memory data = _getDataWithPosition(ACTION_TRADE, state, position);
+
+        if (data.tdVolume == 0) {
+            revert NoVolumeToForceClose();
+        }
+
+        _getFunding(data, v.indexPrice, v.liquidity);
+
+        {
+            int256 diff = data.cumulativeFundingPerVolume.minusUnchecked(data.tdCumulativeFundingPerVolume);
+            s.traderFunding = data.tdVolume * diff / ONE;
+        }
+
+        int256 tradeVolume = -data.tdVolume;
+        s.tradeCost = v.indexPrice * tradeVolume / ONE;
+        s.tradeRealizedCost = data.tdCost + s.tradeCost;
+
+        data.netVolume -= data.tdVolume;
+        data.netCost -= data.tdCost;
+        _getTradersPnl(data, v.indexPrice);
+        _getInitialMarginRequired(data, v.indexPrice);
+
+        data.openVolume -= data.tdVolume.abs();
+
+        data.tdVolume = 0;
+        data.tdCost = 0;
+        data.tdCumulativeFundingPerVolume = data.cumulativeFundingPerVolume;
+
+        s.funding = data.funding;
+        s.diffTradersPnl = data.tradersPnl - state.getInt(S_TRADERSPNL);
+        s.diffInitialMarginRequired = data.initialMarginRequired - state.getInt(S_INITIALMARGINREQUIRED);
+
+        state.set(S_LASTTIMESTAMP, data.curTimestamp);
+        state.set(S_LASTINDEXPRICE, v.indexPrice);
+        state.set(S_NETVOLUME, data.netVolume);
+        state.set(S_NETCOST, data.netCost);
+        state.set(S_OPENVOLUME, data.openVolume);
+        state.set(S_TRADERSPNL, data.tradersPnl);
+        state.set(S_INITIALMARGINREQUIRED, data.initialMarginRequired);
+        state.set(S_CUMULATIVEFUNDINGPERVOLUME, data.cumulativeFundingPerVolume);
+
+        position.set(P_VOLUME, data.tdVolume);
+        position.set(P_COST, data.tdCost);
+        position.set(P_CUMULATIVEFUNDINGPERVOLUME, data.tdCumulativeFundingPerVolume);
+
+        emit SettleFuturesOnForceClose(v.symbolId, v.pTokenId, IFutures.EventDataOnForceClose({
+            indexPrice: v.indexPrice,
+            liquidity: v.liquidity,
+            tradeVolume: tradeVolume,
+            funding: data.funding,
+            tradersPnl: data.tradersPnl,
+            initialMarginRequired: data.initialMarginRequired,
+            traderFunding: s.traderFunding,
+            tradeCost: s.tradeCost,
             tradeRealizedCost: s.tradeRealizedCost
         }));
     }
