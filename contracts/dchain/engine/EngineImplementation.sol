@@ -175,11 +175,9 @@ contract EngineImplementation is EngineStorage {
         _trade(v);
     }
 
-    function forceClose(bytes32 symbolId, uint256[] memory pTokenIds, IOracle.Signature[] memory signatures) external _onlyAdmin_ {
+    function forceClose(bytes32 symbolId, IOracle.Signature[] memory signatures) external _onlyAdmin_ {
         oracle.updateOffchainValues(signatures);
-        if (pTokenIds.length == 0) {
-            pTokenIds = symbolManager.getPTokenIdsOfSymbol(symbolId);
-        }
+        uint256[] memory pTokenIds = symbolManager.getPTokenIdsOfSymbol(symbolId);
         for (uint256 i = 0; i < pTokenIds.length; i++) {
             _forceClose(symbolId, pTokenIds[i]);
         }
