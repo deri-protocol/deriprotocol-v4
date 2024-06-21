@@ -489,10 +489,16 @@ library Gamma {
 
         // trade
         int256 tradeVolume = -data.tdPowerVolume;
-        temp.powerCost = data.powerTheoreticalPrice * tradeVolume / ONE;
+        temp.powerCost = DpmmPower.calculateCost(
+            data.powerTheoreticalPrice, data.powerK, data.netPowerVolume, tradeVolume
+        );
         temp.realFuturesVolume = -data.tdRealFuturesVolume;
         temp.realFuturesCost = temp.realFuturesVolume * data.curIndexPrice / ONE;
-        s.tradeCost = temp.powerCost + temp.realFuturesCost;
+        temp.effectiveFuturesVolume = 2 * data.curIndexPrice * tradeVolume / data.oneHT + temp.realFuturesVolume;
+        temp.slippageCost = _calculateSlippageCost(
+            data.curIndexPrice, data.futuresK, data.curNetEffectiveFuturesVolume, temp.effectiveFuturesVolume
+        );
+        s.tradeCost = temp.powerCost + temp.realFuturesCost + temp.slippageCost;
         s.tradeRealizedCost = data.tdCost + s.tradeCost;
 
         data.netPowerVolume -= data.tdPowerVolume;

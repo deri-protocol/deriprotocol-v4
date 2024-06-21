@@ -474,7 +474,9 @@ library Option {
         }
 
         int256 tradeVolume = -data.tdVolume;
-        s.tradeCost = data.theoreticalPrice * tradeVolume / ONE;
+        s.tradeCost = DpmmOption.calculateCost(
+            data.theoreticalPrice, data.k, data.netVolume, tradeVolume
+        );
         s.tradeRealizedCost = data.tdCost + s.tradeCost;
 
         data.netVolume -= data.tdVolume;

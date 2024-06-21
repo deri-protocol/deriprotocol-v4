@@ -436,7 +436,9 @@ library Futures {
         }
 
         int256 tradeVolume = -data.tdVolume;
-        s.tradeCost = v.indexPrice * tradeVolume / ONE;
+        s.tradeCost = DpmmFutures.calculateCost(
+            v.indexPrice, data.k, data.netVolume, tradeVolume
+        );
         s.tradeRealizedCost = data.tdCost + s.tradeCost;
 
         data.netVolume -= data.tdVolume;
