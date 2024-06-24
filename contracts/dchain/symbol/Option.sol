@@ -21,6 +21,7 @@ library Option {
     error MarkExceedsLimit();
     error OpenInterestExceedsLimit();
     error StartingPriceShiftExceedsLimit();
+    error NoVolumeToForceClose();
 
     event UpdateOptionParameter(bytes32 symbolId);
     event RemoveOption(bytes32 symbolId);
@@ -46,6 +47,11 @@ library Option {
         bytes32 indexed symbolId,
         uint256 indexed pTokenId,
         IOption.EventDataOnLiquidate data
+    );
+    event SettleOptionOnForceClose(
+        bytes32 indexed symbolId,
+        uint256 indexed pTokenId,
+        IOption.EventDataOnForceClose data
     );
 
     // parameters
@@ -444,6 +450,74 @@ library Option {
             traderInitialMarginRequired: s.traderInitialMarginRequired,
             tradeCost: s.tradeCost,
             tradeFee: s.tradeFee,
+            tradeRealizedCost: s.tradeRealizedCost
+        }));
+    }
+
+    function settleOnForceClose(
+        mapping(uint8 => bytes32) storage state,
+        mapping(uint8 => bytes32) storage position,
+        IOption.VarOnForceClose memory v
+    ) external returns (IOption.SettlementOnForceClose memory s)
+    {
+        Data memory data = _getDataWithPosition(ACTION_TRADE, state, position);
+
+        if (data.tdVolume == 0) {
+            revert NoVolumeToForceClose();
+        }
+
+        _getFunding(data, v.indexPrice, v.volatility, v.liquidity);
+
+        {
+            int256 diff = data.cumulativeFundingPerVolume.minusUnchecked(data.tdCumulativeFundingPerVolume);
+            s.traderFunding = data.tdVolume * diff / ONE;
+        }
+
+        int256 tradeVolume = -data.tdVolume;
+        s.tradeCost = DpmmOption.calculateCost(
+            data.theoreticalPrice, data.k, data.netVolume, tradeVolume
+        );
+        s.tradeRealizedCost = data.tdCost + s.tradeCost;
+
+        data.netVolume -= data.tdVolume;
+        data.netCost -= data.tdCost;
+        _getTradersPnl(data);
+        _getInitialMarginRequired(data, v.indexPrice);
+
+        data.openVolume -= data.tdVolume.abs();
+
+        data.tdVolume = 0;
+        data.tdCost = 0;
+        data.tdCumulativeFundingPerVolume = data.cumulativeFundingPerVolume;
+
+        s.funding = data.funding;
+        s.diffTradersPnl = data.tradersPnl - state.getInt(S_TRADERSPNL);
+        s.diffInitialMarginRequired = data.initialMarginRequired - state.getInt(S_INITIALMARGINREQUIRED);
+
+        state.set(S_LASTTIMESTAMP, data.curTimestamp);
+        state.set(S_LASTINDEXPRICE, v.indexPrice);
+        state.set(S_LASTVOLATILITY, v.volatility);
+        state.set(S_NETVOLUME, data.netVolume);
+        state.set(S_NETCOST, data.netCost);
+        state.set(S_OPENVOLUME, data.openVolume);
+        state.set(S_TRADERSPNL, data.tradersPnl);
+        state.set(S_INITIALMARGINREQUIRED, data.initialMarginRequired);
+        state.set(S_CUMULATIVEFUNDINGPERVOLUME, data.cumulativeFundingPerVolume);
+
+        position.set(P_VOLUME, data.tdVolume);
+        position.set(P_COST, data.tdCost);
+        position.set(P_CUMULATIVEFUNDINGPERVOLUME, data.tdCumulativeFundingPerVolume);
+
+        emit SettleOptionOnForceClose(v.symbolId, v.pTokenId, IOption.EventDataOnForceClose({
+            indexPrice: v.indexPrice,
+            volatility: v.volatility,
+            liquidity: v.liquidity,
+            tradeVolume: tradeVolume,
+            funding: data.funding,
+            tradersPnl: data.tradersPnl,
+            initialMarginRequired: data.initialMarginRequired,
+            traderFunding: s.traderFunding,
+            tradeCost: s.tradeCost,
             tradeRealizedCost: s.tradeRealizedCost
         }));
     }

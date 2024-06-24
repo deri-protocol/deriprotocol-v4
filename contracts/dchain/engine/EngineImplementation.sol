@@ -175,6 +175,14 @@ contract EngineImplementation is EngineStorage {
         _trade(v);
     }
 
+    function forceClose(bytes32 symbolId, IOracle.Signature[] memory signatures) external _onlyAdmin_ {
+        oracle.updateOffchainValues(signatures);
+        uint256[] memory pTokenIds = symbolManager.getPTokenIdsOfSymbol(symbolId);
+        for (uint256 i = 0; i < pTokenIds.length; i++) {
+            _forceClose(symbolId, pTokenIds[i]);
+        }
+    }
+
     function liquidate(bytes memory eventData, bytes memory eventSig, IOracle.Signature[] memory signatures) external _reentryLock_ {
         _verifyEventData(eventData, eventSig);
         oracle.updateOffchainValues(signatures);
@@ -397,6 +405,21 @@ contract EngineImplementation is EngineStorage {
         }
 
         _saveData(data, v.pTokenId, false);
+    }
+
+    function _forceClose(bytes32 symbolId, uint256 pTokenId) internal {
+        Data memory data = _getData(pTokenId, false);
+
+        ISymbolManager.SettlementOnForceClose memory s = symbolManager.settleSymbolOnForceClose(
+            symbolId, pTokenId, data.totalLiquidity + data.lpsPnl
+        );
+
+        int256 undistributedPnl = s.funding - s.diffTradersPnl + s.tradeRealizedCost;
+        _settleUndistributedPnl(data, undistributedPnl);
+
+        data.cumulativePnl = data.cumulativePnl.minusUnchecked(s.traderFunding + s.tradeRealizedCost);
+
+        _saveData(data, pTokenId, false);
     }
 
     function _liquidate(IEngine.VarOnLiquidate memory v) internal {

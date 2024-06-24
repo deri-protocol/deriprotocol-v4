@@ -110,4 +110,25 @@ interface IPower is ISymbol {
         int256 tradeRealizedCost;
     }
 
+    struct VarOnForceClose {
+        bytes32 symbolId;
+        uint256 pTokenId;
+        int256 indexPrice;
+        int256 volatility;
+        int256 liquidity;
+    }
+
+    struct EventDataOnForceClose {
+        int256 indexPrice;
+        int256 volatility;
+        int256 liquidity;
+        int256 tradeVolume;
+        int256 funding;
+        int256 tradersPnl;
+        int256 initialMarginRequired;
+        int256 traderFunding;
+        int256 tradeCost;
+        int256 tradeRealizedCost;
+    }
+
 }

@@ -44,6 +44,14 @@ interface ISymbolManager {
         int256 tradeRealizedCost;
     }
 
+    struct SettlementOnForceClose {
+        int256 funding;
+        int256 diffTradersPnl;
+        int256 initialMarginRequired;
+        int256 traderFunding;
+        int256 tradeRealizedCost;
+    }
+
     function getSymbolId(string memory symbol, uint8 category) external pure returns (bytes32 symbolId);
 
     function getCategory(bytes32 symbolId) external pure returns (uint8);
@@ -75,6 +83,9 @@ interface ISymbolManager {
 
     function settleSymbolsOnTrade(bytes32 symbolId, uint256 pTokenId, int256 liquidity, int256[] memory tradeParams)
     external returns (SettlementOnTrade memory ss);
+
+    function settleSymbolOnForceClose(bytes32 symbolId, uint256 pTokenId, int256 liquidity)
+    external returns (ISymbolManager.SettlementOnForceClose memory ss);
 
     function settleSymbolsOnLiquidate(uint256 pTokenId, int256 liquidity)
     external returns (SettlementOnLiquidate memory ss);

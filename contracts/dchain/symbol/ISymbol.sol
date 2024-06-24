@@ -53,4 +53,13 @@ interface ISymbol {
         int256 tradeRealizedCost;
     }
 
+    struct SettlementOnForceClose {
+        int256 funding;
+        int256 diffTradersPnl;
+        int256 diffInitialMarginRequired;
+        int256 traderFunding;
+        int256 tradeCost;
+        int256 tradeRealizedCost;
+    }
+
 }

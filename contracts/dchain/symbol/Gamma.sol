@@ -19,6 +19,7 @@ library Gamma {
     error CloseOnly();
     error SlippageExceedsLimit();
     error MarkExceedsLimit();
+    error NoVolumeToForceClose();
 
     event UpdateGammaParameter(bytes32 symbolId);
     event RemoveGamma(bytes32 symbolId);
@@ -44,6 +45,11 @@ library Gamma {
         bytes32 indexed symbolId,
         uint256 indexed pTokenId,
         IGamma.EventDataOnLiquidate data
+    );
+    event SettleGammaOnForceClose(
+        bytes32 indexed symbolId,
+        uint256 indexed pTokenId,
+        IGamma.EventDataOnForceClose data
     );
 
     // parameters
@@ -456,6 +462,78 @@ library Gamma {
             traderInitialMarginRequired: s.traderInitialMarginRequired,
             tradeCost: s.tradeCost,
             tradeFee: s.tradeFee,
+            tradeRealizedCost: s.tradeRealizedCost
+        }));
+    }
+
+    function settleOnForceClose(
+        mapping(uint8 => bytes32) storage state,
+        mapping(uint8 => bytes32) storage position,
+        IGamma.VarOnForceClose memory v
+    ) external returns (IGamma.SettlementOnForceClose memory s)
+    {
+        Data memory data = _getDataWithPosition(state, position, v.indexPrice, v.volatility);
+        TempTrade memory temp;
+
+        if (data.tdPowerVolume == 0) {
+            revert NoVolumeToForceClose();
+        }
+
+        _getFunding(data, v.liquidity);
+
+        // funding
+        unchecked { temp.diff = data.cumulaitveFundingPerPowerVolume - data.tdCumulaitveFundingPerPowerVolume; }
+        s.traderFunding = data.tdPowerVolume * temp.diff / ONE;
+        unchecked { temp.diff = data.cumulativeFundingPerRealFuturesVolume - data.tdCumulativeFundingPerRealFuturesVolume; }
+        s.traderFunding += data.tdRealFuturesVolume * temp.diff / ONE;
+
+        // trade
+        int256 tradeVolume = -data.tdPowerVolume;
+        temp.powerCost = DpmmPower.calculateCost(
+            data.powerTheoreticalPrice, data.powerK, data.netPowerVolume, tradeVolume
+        );
+        temp.realFuturesVolume = -data.tdRealFuturesVolume;
+        temp.realFuturesCost = temp.realFuturesVolume * data.curIndexPrice / ONE;
+        temp.effectiveFuturesVolume = 2 * data.curIndexPrice * tradeVolume / data.oneHT + temp.realFuturesVolume;
+        temp.slippageCost = _calculateSlippageCost(
+            data.curIndexPrice, data.futuresK, data.curNetEffectiveFuturesVolume, temp.effectiveFuturesVolume
+        );
+        s.tradeCost = temp.powerCost + temp.realFuturesCost + temp.slippageCost;
+        s.tradeRealizedCost = data.tdCost + s.tradeCost;
+
+        data.netPowerVolume -= data.tdPowerVolume;
+        data.netRealFuturesVolume -= data.tdRealFuturesVolume;
+        data.netCost -= data.tdCost;
+        _getTradersPnl(data);
+        _getInitialMarginRequired(data);
+
+        data.tdPowerVolume = 0;
+        data.tdRealFuturesVolume = 0;
+        data.tdCost = 0;
+        data.tdCumulaitveFundingPerPowerVolume = data.cumulaitveFundingPerPowerVolume;
+        data.tdCumulativeFundingPerRealFuturesVolume = data.cumulativeFundingPerRealFuturesVolume;
+
+        s.funding = data.funding;
+        s.diffTradersPnl = data.tradersPnl - state.getInt(S_TRADERSPNL);
+        s.diffInitialMarginRequired = data.initialMarginRequired - state.getInt(S_INITIALMARGINREQUIRED);
+
+        _saveData(state, data, true);
+        position.set(P_POWERVOLUME, data.tdPowerVolume);
+        position.set(P_REALFUTURESVOLUME, data.tdRealFuturesVolume);
+        position.set(P_COST, data.tdCost);
+        position.set(P_CUMULAITVEFUNDINGPERPOWERVOLUME, data.tdCumulaitveFundingPerPowerVolume);
+        position.set(P_CUMULATIVEFUNDINGPERREALFUTURESVOLUME, data.tdCumulativeFundingPerRealFuturesVolume);
+
+        emit SettleGammaOnForceClose(v.symbolId, v.pTokenId, IGamma.EventDataOnForceClose({
+            indexPrice: v.indexPrice,
+            volatility: v.volatility,
+            liquidity: v.liquidity,
+            tradeVolume: tradeVolume,
+            funding: data.funding,
+            tradersPnl: data.tradersPnl,
+            initialMarginRequired: data.initialMarginRequired,
+            traderFunding: s.traderFunding,
+            tradeCost: s.tradeCost,
             tradeRealizedCost: s.tradeRealizedCost
         }));
     }
