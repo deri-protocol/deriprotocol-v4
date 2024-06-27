@@ -19,7 +19,7 @@ contract OracleImplementation is OracleStorage {
 
     // @notice Get oracle value of current block
     // @dev When source is offchain, value must be updated in current block, otherwise revert
-    function getValueCurrentBlock(bytes32 oracleId) public view returns (int256) {
+    function getValueCurrentBlock(bytes32 oracleId) public returns (int256) {
         return IOracle(baseOracles[oracleId]).getValueCurrentBlock(oracleId);
     }
 
