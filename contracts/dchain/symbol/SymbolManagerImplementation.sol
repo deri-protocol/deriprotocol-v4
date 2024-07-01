@@ -356,7 +356,7 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
         }
     }
 
-    function _getIndexPrice(bytes32 symbolId) internal view returns (int256) {
+    function _getIndexPrice(bytes32 symbolId) internal returns (int256) {
         mapping(uint8 => bytes32) storage state = _states[symbolId];
         uint8 category = getCategory(symbolId);
         bytes32 oracleId = (
@@ -369,7 +369,7 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
         return IOracle(oracle).getValueCurrentBlock(oracleId);
     }
 
-    function _getVolatility(bytes32 symbolId) internal view returns (int256) {
+    function _getVolatility(bytes32 symbolId) internal returns (int256) {
         mapping(uint8 => bytes32) storage state = _states[symbolId];
         uint8 category = getCategory(symbolId);
         bytes32 oracleId = (

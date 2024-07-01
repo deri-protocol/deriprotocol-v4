@@ -28,22 +28,29 @@ contract BaseOracleCombo is Admin {
     }
 
     function getValue(bytes32 oracleId) public view returns (int256) {
-        return _getValue(oracleId, false);
-    }
-
-    function getValueCurrentBlock(bytes32 oracleId) public view returns (int256) {
-        return _getValue(oracleId, true);
-    }
-
-    function _getValue(bytes32 oracleId, bool currentBlock) internal view returns (int256) {
         SubOracle[] storage subs = subOracles[oracleId];
         require(subs.length > 0, 'No sub oracles');
 
         int256 value = ONE;
         for (uint256 i = 0; i < subs.length; i++) {
-            int256 iValue = currentBlock
-                          ? IOracle(subs[i].oracleAddress).getValueCurrentBlock(subs[i].oracleId)
-                          : IOracle(subs[i].oracleAddress).getValue(subs[i].oracleId);
+            int256 iValue = IOracle(subs[i].oracleAddress).getValue(subs[i].oracleId);
+            if (subs[i].reciprocal) {
+                value = value * ONE / iValue;
+            } else {
+                value = value * iValue / ONE;
+            }
+        }
+
+        return value;
+    }
+
+    function getValueCurrentBlock(bytes32 oracleId) public returns (int256) {
+        SubOracle[] storage subs = subOracles[oracleId];
+        require(subs.length > 0, 'No sub oracles');
+
+        int256 value = ONE;
+        for (uint256 i = 0; i < subs.length; i++) {
+            int256 iValue = IOracle(subs[i].oracleAddress).getValueCurrentBlock(subs[i].oracleId);
             if (subs[i].reciprocal) {
                 value = value * ONE / iValue;
             } else {

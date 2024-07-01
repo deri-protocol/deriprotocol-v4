@@ -18,7 +18,7 @@ interface IOracle is IAdmin, IImplementation {
 
     function getValue(bytes32 oracleId) external view returns (int256);
 
-    function getValueCurrentBlock(bytes32 oracleId) external view returns (int256);
+    function getValueCurrentBlock(bytes32 oracleId) external returns (int256);
 
     function updateOffchainValue(Signature memory s) external;
 
