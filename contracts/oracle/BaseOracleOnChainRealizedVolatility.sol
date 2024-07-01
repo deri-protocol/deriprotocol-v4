@@ -60,8 +60,8 @@ contract BaseOracleOnChainRealizedVolatility is Admin {
             int256 currentPrice = IOracle(info.priceOracle).getValueCurrentBlock(info.priceId);
             int256 r = currentPrice * ONE / info.price - ONE;
             int256 variance;
-            if (ONE >= info.tau * deltaT) {
-                variance = r ** 2 / ONE * info.tau / ONE * 31536000 + info.volatility ** 2 / ONE * (ONE - info.tau * deltaT) / ONE;
+            if (deltaT < info.tau) {
+                variance = r ** 2 / ONE * 31536000 / info.tau + info.volatility ** 2 / ONE * (info.tau - deltaT) / info.tau;
             } else {
                 variance = r ** 2 / ONE * 31536000 / deltaT;
             }
