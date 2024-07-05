@@ -91,6 +91,8 @@ interface IGateway {
         uint256 cumulativeCollectedProtocolFeeOnEngine;
     }
 
+    function getGatewayParam() external view returns (GatewayParam memory p);
+
     function getGatewayState() external view returns (GatewayState memory s);
 
     function getBTokenState(address bToken) external view returns (BTokenState memory s);
