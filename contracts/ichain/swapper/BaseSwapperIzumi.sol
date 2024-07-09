@@ -84,14 +84,19 @@ contract BaseSwapperIzumi is Admin {
             minAcquired: amount2,
             deadline: block.timestamp
         });
-        (uint256 amountIn, uint256 amountOut) = swap.swapAmount{value: token1 == tokenWETH ? amount1 : 0}(params);
+        (, uint256 amountOut) = swap.swapAmount{value: token1 == tokenWETH ? amount1 : 0}(params);
 
         if (token2 == tokenWETH) {
             IWETH(tokenWETH).withdraw(amountOut);
             _sendETH(recipient, amountOut);
         }
 
-        result1 = amountIn;
+        // The amountIn returned by swapAmount may be less than amount1, leaving a residual amount.
+        // We return result1 as amount1 so that the calling party doesn't need to handle the residual.
+        // The residual will remain in this contract until a later `swapTokensForExactTokens` call,
+        // at which point the residual amount will be entitled to whoever makes the call.
+        // This logic is simple, yet acceptable, since the residual amount is extremely small.
+        result1 = amount1;
         result2 = amountOut;
     }
 
