@@ -2,9 +2,9 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import './HypernativeOracleStorage.sol';
+import './SwitchOracleStorage.sol';
 
-contract HypernativeOracle is HypernativeOracleStorage {
+contract SwitchOracle is SwitchOracleStorage {
 
     fallback() external payable {
         address imp = implementation;

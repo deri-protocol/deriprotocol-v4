@@ -19,7 +19,7 @@ interface IGateway {
         int256  maxLiquidationReward;
         address protocolFeeManager;
         address liqClaim;
-        address hypernativeOracle;
+        address switchOracle;
     }
 
     struct GatewayState {

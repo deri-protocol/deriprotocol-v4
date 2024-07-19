@@ -14,7 +14,7 @@ import '../../library/SafeMath.sol';
 import { GatewayIndex as I } from './GatewayIndex.sol';
 import './GatewayHelper.sol';
 import './GatewayStorage.sol';
-import '../../utils/IHypernativeOracle.sol';
+import '../../utils/ISwitchOracle.sol';
 
 contract GatewayImplementation is GatewayStorage {
 
@@ -135,7 +135,7 @@ contract GatewayImplementation is GatewayStorage {
     int256   internal immutable maxLiquidationReward;
     address  internal immutable protocolFeeManager;
     address  internal immutable liqClaim;
-    address  internal immutable hypernativeOracle;
+    address  internal immutable switchOracle;
 
     constructor (IGateway.GatewayParam memory p) {
         lToken = IDToken(p.lToken);
@@ -153,7 +153,7 @@ contract GatewayImplementation is GatewayStorage {
         maxLiquidationReward = p.maxLiquidationReward;
         protocolFeeManager = p.protocolFeeManager;
         liqClaim = p.liqClaim;
-        hypernativeOracle = p.hypernativeOracle;
+        switchOracle = p.switchOracle;
     }
 
     //================================================================================
@@ -947,7 +947,7 @@ contract GatewayImplementation is GatewayStorage {
      * @return bAmount The amount of tokens actually transferred.
      */
     function _transferOut(Data memory data, uint256 bAmountOut, bool isTd) internal returns (uint256 bAmount) {
-        require(!IHypernativeOracle(hypernativeOracle).getSwitchWithdrawDisabled());
+        require(!ISwitchOracle(switchOracle).getSwitchWithdrawDisabled());
 
         uint256 minSwapB0Amount = 10 ** (decimalsB0 - 2); // min swap b0Amount of 0.01 USDC
         bAmount = bAmountOut;

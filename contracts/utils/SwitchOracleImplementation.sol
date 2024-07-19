@@ -2,9 +2,9 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import './HypernativeOracleStorage.sol';
+import './SwitchOracleStorage.sol';
 
-contract HypernativeOracleImplementation is HypernativeOracleStorage {
+contract SwitchOracleImplementation is SwitchOracleStorage {
 
     event SetOperator(uint256 key, address operator);
     event SetSwitch(uint256 key, bool state);
