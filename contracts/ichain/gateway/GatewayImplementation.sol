@@ -947,7 +947,7 @@ contract GatewayImplementation is GatewayStorage {
      * @return bAmount The amount of tokens actually transferred.
      */
     function _transferOut(Data memory data, uint256 bAmountOut, bool isTd) internal returns (uint256 bAmount) {
-        require(!ISwitchOracle(switchOracle).getSwitchWithdrawDisabled());
+        require(!ISwitchOracle(switchOracle).state());
 
         uint256 minSwapB0Amount = 10 ** (decimalsB0 - 2); // min swap b0Amount of 0.01 USDC
         bAmount = bAmountOut;

@@ -6,49 +6,20 @@ import './SwitchOracleStorage.sol';
 
 contract SwitchOracleImplementation is SwitchOracleStorage {
 
-    event SetOperator(uint256 key, address operator);
-    event SetSwitch(uint256 key, bool state);
+    address public operator;
+    bool public state;
 
-    uint256 constant keyWithdrawDisabled = 101;
-
-    //================================================================================
-    // Views
-    //================================================================================
-
-    function getOperator(uint256 key) external view returns (address) {
-        return _operators[key];
+    function setOperator(address operator_) external _onlyAdmin_ {
+        operator = operator_;
     }
 
-    function getSwitch(uint256 key) external view returns (bool) {
-        return _switches[key];
+    function resetState() external _onlyAdmin_ {
+        state = false;
     }
 
-    function getSwitchWithdrawDisabled() external view returns (bool) {
-        return _switches[keyWithdrawDisabled];
-    }
-
-    //================================================================================
-    // Admin
-    //================================================================================
-
-    function setOperator(uint256 key, address operator) external _onlyAdmin_ {
-        _operators[key] = operator;
-        emit SetOperator(key, operator);
-    }
-
-    function resetSwitch(uint256 key) external _onlyAdmin_ {
-        _switches[key] = false;
-        emit SetSwitch(key, false);
-    }
-
-    //================================================================================
-    // Operator
-    //================================================================================
-
-    function setSwitchWithdrawDisabled() external {
-        require(_operators[keyWithdrawDisabled] == msg.sender, 'not operator');
-        _switches[keyWithdrawDisabled] = true;
-        emit SetSwitch(keyWithdrawDisabled, true);
+    function setState() external {
+        require(msg.sender == operator, 'not operator');
+        state = true;
     }
 
 }
