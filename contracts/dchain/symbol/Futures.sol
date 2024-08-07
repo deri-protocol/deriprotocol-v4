@@ -87,6 +87,8 @@ library Futures {
 
     int256 constant ONE = 1e18;
 
+    int256 constant baseDailyFundingRate = 0.0003e18;
+
     //================================================================================
     // Getters
     //================================================================================
@@ -629,7 +631,10 @@ library Futures {
     function _getFunding(Data memory data, int256 indexPrice, int256 liquidity) internal pure {
         data.k = DpmmFutures.calculateK(data.alpha, indexPrice, liquidity);
         int256 markPrice = DpmmFutures.calculateMarkPrice(indexPrice, data.k, data.netVolume);
-        int256 diffFundingPerVolume = (markPrice - indexPrice) * (data.curTimestamp - data.preTimestamp) / data.fundingPeriod;
+        int256 dt = data.curTimestamp - data.preTimestamp;
+        int256 diffFundingPerVolume =
+            (markPrice - indexPrice) * dt / data.fundingPeriod +
+            indexPrice * baseDailyFundingRate / ONE * dt / 86400;
         data.funding = diffFundingPerVolume * data.netVolume / ONE;
         data.cumulativeFundingPerVolume = data.cumulativeFundingPerVolume.addUnchecked(diffFundingPerVolume);
     }
