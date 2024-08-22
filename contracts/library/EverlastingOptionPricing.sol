@@ -8,7 +8,7 @@ library EverlastingOptionPricing {
 
     int256 private constant ONE = 1e18;
 
-    int256 private constant r = 1095000000000000000; // Interest rate: 109.5%, 0.3% per day
+    int256 private constant r = 109500000000000000; // Interest rate: 10.95%, 0.03% per day
 
     int256 private constant T = 19178082191780822; // Funding Period: 7 / 365, 7 days
 
@@ -16,9 +16,9 @@ library EverlastingOptionPricing {
 
     int256 private constant sqrt2 = 1414213562373095049; // sqrt(2)
 
-    int256 private constant onePlusRT = 1021000000000000000; // 1 + rT
+    int256 private constant onePlusRT = 1002100000000000000; // 1 + rT
 
-    int256 private constant sqrt2MulOnePlusRT = 1428985654231700116; // sqrt(2(1 + rT))
+    int256 private constant sqrt2MulOnePlusRT = 1415697707845852238; // sqrt(2(1 + rT))
 
     struct Tmp {
         int256 x;
