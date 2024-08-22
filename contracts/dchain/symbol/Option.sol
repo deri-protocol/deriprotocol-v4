@@ -627,10 +627,9 @@ library Option {
         int256 tdCumulativeFundingPerVolume;
         // calculations
         int256 intrinsicValue;
-        int256 timeValue;
         int256 theoreticalPrice;
         int256 delta;
-        int256 u;
+        int256 gamma;
         int256 k;
         int256 funding;
         int256 tradersPnl;
@@ -684,27 +683,17 @@ library Option {
         int256 volatility,
         int256 liquidity
     ) internal pure {
-        data.intrinsicValue = data.isCall ?
-                              (indexPrice - data.strikePrice).max(0) :
-                              (data.strikePrice - indexPrice).max(0);
-        (data.timeValue, data.delta, data.u) = EverlastingOptionPricing.getEverlastingTimeValueAndDelta(
-            indexPrice, data.strikePrice, volatility, data.fundingPeriod * ONE / 31536000
+        (
+            data.theoreticalPrice,
+            data.intrinsicValue,
+            data.delta,
+            data.gamma
+        ) = EverlastingOptionPricing.calculateEverlastingOption(
+            indexPrice,
+            data.strikePrice,
+            volatility,
+            data.isCall
         );
-        data.theoreticalPrice = data.intrinsicValue + data.timeValue;
-
-        if (data.intrinsicValue > 0) {
-            if (data.isCall) {
-                data.delta += ONE;
-            } else {
-                data.delta -= ONE;
-            }
-        } else if (indexPrice == data.strikePrice) {
-            if (data.isCall) {
-                data.delta = ONE / 2;
-            } else {
-                data.delta = -ONE / 2;
-            }
-        }
 
         data.k = DpmmOption.calculateK(
             data.alpha, indexPrice, data.theoreticalPrice, data.delta, liquidity
@@ -725,8 +714,9 @@ library Option {
     }
 
     function _getInitialMarginRequired(Data memory data, int256 indexPrice) internal pure {
-        int256 deltaPart = data.delta * (data.isCall ? indexPrice : -indexPrice) / ONE * data.maintenanceMarginRatio / ONE;
-        int256 gammaPart = (data.u ** 2 / ONE - ONE) * data.timeValue / ONE / 8 * data.maintenanceMarginRatio / ONE * data.maintenanceMarginRatio / ONE;
+        int256 dS = indexPrice * data.maintenanceMarginRatio / ONE;
+        int256 deltaPart = data.delta.abs() * dS / ONE;
+        int256 gammaPart = data.gamma.abs() * dS / ONE * dS / ONE / 2;
         data.maintenanceMarginPerVolume = deltaPart + gammaPart;
         data.initialMarginPerVolume = data.maintenanceMarginPerVolume * data.initialMarginRatio / data.maintenanceMarginRatio;
         data.initialMarginRequired = data.netVolume.abs() * data.initialMarginPerVolume / ONE;
