@@ -88,6 +88,7 @@ library Power {
     uint8 constant ACTION_LIQUIDATE         = 5;
 
     int256 constant ONE = 1e18;
+    int256 constant r = 109500000000000000; // risk-free interest rate
 
     //================================================================================
     // Getters
@@ -648,7 +649,7 @@ library Power {
         int256 volatility,
         int256 liquidity
     ) internal pure {
-        int256 oneHT = ONE - volatility ** 2 / ONE * data.fundingPeriod / 31536000; // 1 - hT
+        int256 oneHT = ONE - (r + volatility ** 2 / ONE) * data.fundingPeriod / 31536000; // 1 - hT
         data.powerPrice = indexPrice ** 2 / ONE;
         data.theoreticalPrice = data.powerPrice * ONE / oneHT;
 

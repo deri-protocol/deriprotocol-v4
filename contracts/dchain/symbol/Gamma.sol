@@ -90,6 +90,7 @@ library Gamma {
     // uint8 constant ACTION_LIQUIDATE         = 5;
 
     int256 constant ONE = 1e18;
+    int256 constant r = 109500000000000000; // risk-free interest rate
 
     //================================================================================
     // Getters
@@ -717,7 +718,7 @@ library Gamma {
     }
 
     function _getFunding(Data memory data, int256 liquidity) internal pure {
-        data.oneHT = ONE - data.curVolatility ** 2 / ONE * data.fundingPeriod / 31536000; // 1 - hT
+        data.oneHT = ONE - (r + data.curVolatility ** 2 / ONE) * data.fundingPeriod / 31536000; // 1 - hT
         data.powerTheoreticalPrice = data.curIndexPrice ** 2 / data.oneHT;
         data.powerK = DpmmPower.calculateK(data.powerAlpha, data.powerTheoreticalPrice, liquidity);
         data.futuresK = DpmmFutures.calculateK(data.futuresAlpha, data.curIndexPrice, liquidity);
