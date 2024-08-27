@@ -8,54 +8,97 @@ library EverlastingOptionPricing {
 
     int256 private constant ONE = 1e18;
 
+    int256 private constant r = 109500000000000000; // Interest rate: 10.95%, 0.03% per day
+
+    int256 private constant T = 19178082191780822; // Funding Period: 7 / 365, 7 days
+
+    int256 private constant sqrtT = 138484952943562868; // sqrt(T)
+
+    int256 private constant sqrt2 = 1414213562373095049; // sqrt(2)
+
+    int256 private constant onePlusRT = 1002100000000000000; // 1 + rT
+
+    int256 private constant sqrt2MulOnePlusRT = 1415697707845852238; // sqrt(2(1 + rT))
+
+    struct Tmp {
+        int256 x;
+        int256 p;
+        int256 q;
+        int256 u;
+        int256 w;
+        int256 A;
+        int256 B;
+        int256 SAKB;
+        int256 dVdS;
+        int256 t1;
+        int256 t2;
+    }
     /**
      * @notice Calculate the time value and delta of an option based on the Black-Scholes model.
      * @param S The spot price of the underlying asset.
      * @param K The strike price of the option.
      * @param sigma The volatility of the underlying asset.
-     * @param T The funding period in years.
-     * @return timeValue The time value of the option.
-     * @return delta The delta, which measures the sensitivity of the option's price to changes in the spot price.
-     * @return u The 'u' parameter used in the calculations.
      */
-    function getEverlastingTimeValueAndDelta(int256 S, int256 K, int256 sigma, int256 T)
-    internal pure returns (int256 timeValue, int256 delta, int256 u)
+    function calculateEverlastingOption(int256 S, int256 K, int256 sigma, bool isCall)
+    internal pure returns (
+        int256 theoreticalValue,
+        int256 intrinsicValue,
+        int256 delta,
+        int256 gamma
+    )
     {
-        int256 u2 = ONE * 8 * ONE / sigma * ONE / sigma * ONE / T + ONE;
-        u = PRBMathSD59x18.sqrt(u2);
+        Tmp memory tmp;
 
-        int256 x = S * ONE / K;
-        if (S > K) {
-            timeValue = K * PRBMathSD59x18.pow(x, (ONE - u) / 2) / u;
-            delta = (ONE - u) * timeValue / S / 2;
-        } else if (S == K) {
-            timeValue = K * ONE / u;
-            delta = 0;
-        } else {
-            timeValue = K * PRBMathSD59x18.pow(x, (ONE + u) / 2) / u;
-            delta = (ONE + u) * timeValue / S / 2;
-        }
-    }
+        tmp.x = 2 * r * ONE / sigma * ONE / sigma;
+        tmp.p = ONE + tmp.x;
+        tmp.q = ONE - tmp.x;
 
-    /**
-     * @notice Calculate the Vega, which measures the sensitivity of an option's price to changes in volatility.
-     * @param S The spot price of the underlying asset.
-     * @param K The strike price of the option.
-     * @param sigma The volatility of the underlying asset.
-     * @param timeValue The time value of the option.
-     * @param u The 'u' parameter used in the calculations.
-     * @return vega The Vega of the option.
-     */
-    function getVega(int256 S, int256 K, int256 sigma, int256 timeValue, int256 u)
-    internal pure returns (int256 vega)
-    {
-        int256 p1 = (ONE - ONE * ONE / u * ONE / u) * timeValue / sigma;
-        if (S == K) {
-            vega = p1;
+        tmp.x = sigma * sqrtT / ONE * tmp.p / sqrt2 / 2;
+        tmp.u = ONE * ONE / tmp.x + tmp.x / 2 + tmp.x * tmp.x / ONE * tmp.x / ONE / 8;
+        tmp.x = sigma * sqrtT / ONE * tmp.q / sqrt2MulOnePlusRT / 2;
+        tmp.w = -(ONE * ONE / tmp.x + tmp.x / 2 + tmp.x * tmp.x / ONE * tmp.x / ONE / 8);
+
+        tmp.x = S * ONE / K;
+        if (S >= K) {
+            tmp.A = PRBMathSD59x18.pow(tmp.x, -tmp.p * (ONE + tmp.u) / ONE / 2) * (ONE - tmp.u) / tmp.u / 2;
+            tmp.B = PRBMathSD59x18.pow(tmp.x, tmp.q * (ONE + tmp.w) / ONE / 2) * (ONE - tmp.w) / tmp.w / 2 * ONE / onePlusRT;
+
+            tmp.SAKB = (S * tmp.A - K * tmp.B) / ONE;
+            tmp.dVdS = tmp.A * (ONE - (ONE + tmp.u) * tmp.p / ONE / 2) / ONE - tmp.B * K / S * ((ONE + tmp.w) * tmp.q / ONE / 2) / ONE;
+
+            if (isCall) {
+                theoreticalValue = tmp.SAKB + (S - K * ONE / onePlusRT);
+                intrinsicValue = (S - K) * ONE / onePlusRT;
+                delta = tmp.dVdS + ONE;
+            } else {
+                theoreticalValue = tmp.SAKB;
+                intrinsicValue = 0;
+                delta = tmp.dVdS;
+            }
+
+            tmp.t1 = (ONE + tmp.u) * tmp.p / ONE / 2;
+            tmp.t2 = (ONE + tmp.w) * tmp.q / ONE / 2;
+            gamma = tmp.A * (tmp.t1 - ONE) / S * tmp.t1 / ONE - tmp.B * K / S * (tmp.t2 - ONE) / S * tmp.t2 / ONE;
         } else {
-            int256 lnSK = PRBMathSD59x18.ln(S * ONE / K);
-            int256 p2 = lnSK * u / 2 / ONE;
-            vega = S > K ? p1 * (ONE + p2) / ONE : p1 * (ONE - p2) / ONE;
+            tmp.A = PRBMathSD59x18.pow(tmp.x, -tmp.p * (ONE - tmp.u) / ONE / 2) * (ONE + tmp.u) / tmp.u / 2;
+            tmp.B = PRBMathSD59x18.pow(tmp.x, tmp.q * (ONE - tmp.w) / ONE / 2) * (ONE + tmp.w) / tmp.w / 2 * ONE / onePlusRT;
+
+            tmp.SAKB = (S * tmp.A - K * tmp.B) / ONE;
+            tmp.dVdS = tmp.A * (ONE - (ONE - tmp.u) * tmp.p / ONE / 2) / ONE - tmp.B * K / S * ((ONE - tmp.w) * tmp.q / ONE / 2) / ONE;
+
+            if (isCall) {
+                theoreticalValue = tmp.SAKB;
+                intrinsicValue = 0;
+                delta = tmp.dVdS;
+            } else {
+                theoreticalValue = tmp.SAKB - (S - K * ONE / onePlusRT);
+                intrinsicValue = (K - S) * ONE / onePlusRT;
+                delta = tmp.dVdS - ONE;
+            }
+
+            tmp.t1 = (ONE - tmp.u) * tmp.p / ONE / 2;
+            tmp.t2 = (ONE - tmp.w) * tmp.q / ONE / 2;
+            gamma = tmp.A * (tmp.t1 - ONE) / S * tmp.t1 / ONE - tmp.B * K / S * (tmp.t2 - ONE) / S * tmp.t2 / ONE;
         }
     }
 

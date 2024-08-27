@@ -86,8 +86,7 @@ library Futures {
     uint8 constant ACTION_LIQUIDATE         = 5;
 
     int256 constant ONE = 1e18;
-
-    int256 constant baseDailyFundingRate = 0.0003e18;
+    int256 constant r = 109500000000000000; // risk-free interest rate
 
     //================================================================================
     // Getters
@@ -634,7 +633,7 @@ library Futures {
         int256 dt = data.curTimestamp - data.preTimestamp;
         int256 diffFundingPerVolume =
             (markPrice - indexPrice) * dt / data.fundingPeriod +
-            indexPrice * baseDailyFundingRate / ONE * dt / 86400;
+            indexPrice * r / ONE * dt / 31536000;
         data.funding = diffFundingPerVolume * data.netVolume / ONE;
         data.cumulativeFundingPerVolume = data.cumulativeFundingPerVolume.addUnchecked(diffFundingPerVolume);
     }
