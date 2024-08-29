@@ -90,6 +90,7 @@ library Gamma {
     // uint8 constant ACTION_LIQUIDATE         = 5;
 
     int256 constant ONE = 1e18;
+    int256 constant r = 109500000000000000; // risk-free interest rate
 
     //================================================================================
     // Getters
@@ -717,7 +718,7 @@ library Gamma {
     }
 
     function _getFunding(Data memory data, int256 liquidity) internal pure {
-        data.oneHT = ONE - data.curVolatility ** 2 / ONE * data.fundingPeriod / 31536000; // 1 - hT
+        data.oneHT = ONE - (r + data.curVolatility ** 2 / ONE) * data.fundingPeriod / 31536000; // 1 - hT
         data.powerTheoreticalPrice = data.curIndexPrice ** 2 / data.oneHT;
         data.powerK = DpmmPower.calculateK(data.powerAlpha, data.powerTheoreticalPrice, liquidity);
         data.futuresK = DpmmFutures.calculateK(data.futuresAlpha, data.curIndexPrice, liquidity);
@@ -735,9 +736,11 @@ library Gamma {
             // (i1^2 + i1i2 + i2^2) / (1 - hT)
             int256 v4 = v2 + data.preIndexPrice * data.curIndexPrice / data.oneHT;
 
+            int256 mm = data.netRealFuturesVolume + r * ONE * data.fundingPeriod / 31536000 / data.futuresK;
+
             diffA = v3 * data.netPowerVolume / ONE * data.futuresK / ONE +
-                    v4 * (2 * data.netRealFuturesVolume * data.futuresK / ONE + data.netPowerVolume * data.powerK / ONE + ONE - data.oneHT) / ONE / 3;
-            diffB = (v4 * data.netPowerVolume / ONE * 2 / 3 + v1 * data.netRealFuturesVolume / ONE / 2) * data.futuresK / ONE;
+                    v4 * (2 * mm * data.futuresK / ONE + data.netPowerVolume * data.powerK / ONE + ONE - data.oneHT) / ONE / 3;
+            diffB = (v4 * data.netPowerVolume / ONE * 2 / 3 + v1 * mm / ONE / 2) * data.futuresK / ONE;
 
             int256 dt = (data.curTimestamp - data.preTimestamp).utoi();
 
