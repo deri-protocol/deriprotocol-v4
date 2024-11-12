@@ -372,6 +372,16 @@ library Futures {
             s.positionChange = 1;
         } else if (data.tdVolume + v.tradeVolume == 0) {
             s.positionChange = -1;
+        } else {
+            int256 volume1 = data.tdVolume;
+            int256 volume2 = data.tdVolume + v.tradeVolume;
+            if (volume1 > 0 && volume2 > 0 || volume1 < 0 && volume2 < 0) {
+                if (volume2.abs() > volume1.abs()) {
+                    s.positionChange = 2;
+                } else {
+                    s.positionChange = -2;
+                }
+            }
         }
 
         data.tdVolume += v.tradeVolume;

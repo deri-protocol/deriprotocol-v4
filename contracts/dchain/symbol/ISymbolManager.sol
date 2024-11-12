@@ -33,6 +33,7 @@ interface ISymbolManager {
         int256 traderInitialMarginRequired;
         int256 tradeFee;
         int256 tradeRealizedCost;
+        int256 positionChange;
     }
 
     struct SettlementOnLiquidate {
