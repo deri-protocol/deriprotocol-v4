@@ -289,6 +289,7 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
 
         ss.tradeFee = s2.tradeFee;
         ss.tradeRealizedCost = s2.tradeRealizedCost;
+        ss.positionChange = s2.positionChange;
 
         initialMarginRequired += diffInitialMarginRequired;
         ss.initialMarginRequired = initialMarginRequired;

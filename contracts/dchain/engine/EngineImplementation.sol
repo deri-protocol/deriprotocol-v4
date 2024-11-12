@@ -392,7 +392,7 @@ contract EngineImplementation is EngineStorage {
 
         data.cumulativePnl = data.cumulativePnl.minusUnchecked(s.traderFunding + s.tradeFee + s.tradeRealizedCost);
 
-        if (s.traderInitialMarginRequired > 0) {
+        if (s.positionChange != -1 && s.positionChange != -2) {
             int256 realizedPnl = data.cumulativePnl.minusUnchecked(v.lastCumulativePnlOnEngine);
             int256 requiredRealMoneyMargin = s.traderInitialMarginRequired - s.traderPnl;
             if (v.realMoneyMargin.utoi() + realizedPnl < requiredRealMoneyMargin) {
