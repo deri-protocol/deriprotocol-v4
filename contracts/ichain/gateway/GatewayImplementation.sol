@@ -343,8 +343,7 @@ contract GatewayImplementation is GatewayStorage {
             revert InvalidBAmount();
         }
 
-        Data memory data = _getData(msg.sender, lTokenId, bToken);
-        data.bToken = _dTokenStates[lTokenId].getAddress(I.D_BTOKEN);
+        Data memory data = _getData(msg.sender, lTokenId, _dTokenStates[lTokenId].getAddress(I.D_BTOKEN));
 
         _getExParams(data);
         uint256 oldLiquidity = _getDTokenLiquidity(data);
