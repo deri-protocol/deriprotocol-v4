@@ -420,6 +420,14 @@ contract GatewayImplementation is GatewayStorage {
         return pTokenId;
     }
 
+    function requestAddMarginB0(uint256 pTokenId, uint256 b0Amount) external {
+        _checkPTokenIdOwner(pTokenId, msg.sender);
+        tokenB0.transferIn(msg.sender, b0Amount);
+        vault0.deposit(uint256(0), b0Amount);
+        int256 curB0Amount = _dTokenStates[pTokenId].getInt(I.D_B0AMOUNT);
+        _dTokenStates[pTokenId].set(I.D_B0AMOUNT, curB0Amount + b0Amount.utoi());
+    }
+
     /**
      * @notice Request to remove margin with specified base token.
      * @param pTokenId The unique identifier of the PToken.
@@ -931,19 +939,22 @@ contract GatewayImplementation is GatewayStorage {
                     uint256 b0Shortage = (bAmount - bAmountInVault) * data.bPrice / UONE;
                     uint256 b0Amount = data.b0Amount.itou();
                     if (b0Amount > b0Shortage) {
-                        liquidity = (b0Amount - b0Shortage).rescale(decimalsB0, 18);
+                        liquidity = (b0Amount - b0Shortage);
                     }
                 }
             } else {
                 uint256 b0Excessive = (bAmountInVault - bAmount) * data.bPrice / UONE * data.collateralFactor / UONE; // discounted
                 if (data.b0Amount >= 0) {
-                    liquidity = b0Excessive.add(data.b0Amount).rescale(decimalsB0, 18);
+                    liquidity = b0Excessive.add(data.b0Amount);
                 } else {
                     uint256 b0Shortage = (-data.b0Amount).itou();
                     if (b0Excessive > b0Shortage) {
-                        liquidity = (b0Excessive - b0Shortage).rescale(decimalsB0, 18);
+                        liquidity = (b0Excessive - b0Shortage);
                     }
                 }
+            }
+            if (liquidity > 0) {
+                liquidity = liquidity.rescale(decimalsB0, 18);
             }
         }
     }
