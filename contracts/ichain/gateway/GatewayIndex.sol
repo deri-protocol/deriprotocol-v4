@@ -27,7 +27,7 @@ library GatewayIndex {
     uint8 constant D_SINGLEPOSITION                     = 8;  // Td single position flag
     uint8 constant D_LASTREQUESTICHAINEXECUTIONFEE      = 9;  // User last request's iChain execution fee
     uint8 constant D_CUMULATIVEUNUSEDICHAINEXECUTIONFEE = 10; // User cumulaitve iChain execution fee for requests cannot be finished, users can claim back
-    uint8 constant D_LASTOPERATETOKEN                   = 11;
+    uint8 constant D_CURRENTOPERATETOKEN                = 11;
 
     uint256 constant ACTION_REQUESTADDLIQUIDITY         = 1;
     uint256 constant ACTION_REQUESTREMOVELIQUIDITY      = 2;

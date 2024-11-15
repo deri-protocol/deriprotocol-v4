@@ -345,23 +345,22 @@ contract GatewayImplementation is GatewayStorage {
 
         Data memory data = _getData(msg.sender, lTokenId, bToken);
         data.bToken = _dTokenStates[lTokenId].getAddress(I.D_BTOKEN);
-        if (data.bToken != bToken && bToken != tokenB0) {
-            revert InvalidBToken();
-        }
 
         _getExParams(data);
         uint256 oldLiquidity = _getDTokenLiquidity(data);
         uint256 newLiquidity;
         if (data.bToken == bToken) {
             newLiquidity = _getDTokenLiquidityWithRemove(data, bAmount);
-        } else {
+        } else if (bToken == tokenB0) {
             newLiquidity = _getDTokenLiquidityWithRemoveB0(data, bAmount);
+        } else {
+            revert InvalidBToken();
         }
         if (newLiquidity <= oldLiquidity / 100) {
             newLiquidity = 0;
         }
 
-        _dTokenStates[lTokenId].set(I.D_LASTOPERATETOKEN, bToken);
+        _dTokenStates[lTokenId].set(I.D_CURRENTOPERATETOKEN, bToken);
         uint256 requestId = _incrementRequestId(lTokenId);
         emit RequestUpdateLiquidity(
             requestId,
@@ -591,7 +590,7 @@ contract GatewayImplementation is GatewayStorage {
         uint256 bAmountRemoved;
         address operateToken = data.bToken;
         if (v.bAmountToRemove != 0) {
-            operateToken = _dTokenStates[v.lTokenId].getAddress(I.D_LASTOPERATETOKEN);
+            operateToken = _dTokenStates[v.lTokenId].getAddress(I.D_CURRENTOPERATETOKEN);
             if (data.bToken == operateToken) {
                 _getExParams(data);
                 bAmountRemoved = _transferOut(data, v.liquidity == 0 ? type(uint256).max : v.bAmountToRemove, false);
@@ -951,17 +950,15 @@ contract GatewayImplementation is GatewayStorage {
 
     function _getDTokenLiquidityWithRemoveB0(Data memory data, uint256 b0AmountToRemove) internal view returns (uint256 liquidity) {
         uint256 bAmountInVault = IVault(data.vault).getBalance(data.dTokenId);
-        uint256 b0Excessive = bAmountInVault * data.bPrice / UONE * data.collateralFactor / UONE; // discounted
+        uint256 b0ValueOfBAmountInVault = bAmountInVault * data.bPrice / UONE * data.collateralFactor / UONE; // discounted
+        uint256 b0Total;
         if (data.b0Amount >= 0) {
-            uint256 b0Total = b0Excessive.add(data.b0Amount);
-            if (b0Total > b0AmountToRemove) {
-                liquidity = (b0Total - b0AmountToRemove).rescale(decimalsB0, 18);
-            }
+            b0Total = b0ValueOfBAmountInVault.add(data.b0Amount);
         } else {
-            uint256 b0Shortage = (-data.b0Amount).itou();
-            if (b0Excessive > b0Shortage + b0AmountToRemove) {
-                liquidity = (b0Excessive - b0Shortage - b0AmountToRemove).rescale(decimalsB0, 18);
-            }
+            b0Total = b0ValueOfBAmountInVault - (-data.b0Amount).itou();
+        }
+        if (b0Total > b0AmountToRemove) {
+            liquidity = (b0Total - b0AmountToRemove).rescale(decimalsB0, 18);
         }
     }
 
