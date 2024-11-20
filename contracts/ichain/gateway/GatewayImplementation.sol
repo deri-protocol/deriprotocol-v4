@@ -208,42 +208,42 @@ contract GatewayImplementation is GatewayStorage {
     // Setters
     //================================================================================
 
-    function addBToken(
-        address bToken,
-        address vault,
-        bytes32 oracleId,
-        uint256 collateralFactor
-    ) external _onlyAdmin_ {
-        GatewayHelper.addBToken(
-            _bTokenStates,
-            swapper,
-            oracle,
-            vault0,
-            tokenB0,
-            bToken,
-            vault,
-            oracleId,
-            collateralFactor
-        );
-    }
+    // function addBToken(
+    //     address bToken,
+    //     address vault,
+    //     bytes32 oracleId,
+    //     uint256 collateralFactor
+    // ) external _onlyAdmin_ {
+    //     GatewayHelper.addBToken(
+    //         _bTokenStates,
+    //         swapper,
+    //         oracle,
+    //         vault0,
+    //         tokenB0,
+    //         bToken,
+    //         vault,
+    //         oracleId,
+    //         collateralFactor
+    //     );
+    // }
 
-    function delBToken(address bToken) external _onlyAdmin_ {
-        GatewayHelper.delBToken(_bTokenStates, bToken);
-    }
+    // function delBToken(address bToken) external _onlyAdmin_ {
+    //     GatewayHelper.delBToken(_bTokenStates, bToken);
+    // }
 
-    // @dev This function can be used to change bToken collateral factor
-    function setBTokenParameter(address bToken, uint8 idx, bytes32 value) external _onlyAdmin_ {
-        GatewayHelper.setBTokenParameter(_bTokenStates, bToken, idx, value);
-    }
+    // // @dev This function can be used to change bToken collateral factor
+    // function setBTokenParameter(address bToken, uint8 idx, bytes32 value) external _onlyAdmin_ {
+    //     GatewayHelper.setBTokenParameter(_bTokenStates, bToken, idx, value);
+    // }
 
-    // @notice Set execution fee for actionId
-    function setExecutionFee(uint256 actionId, uint256 executionFee) external _onlyAdmin_ {
-        GatewayHelper.setExecutionFee(_executionFees, actionId, executionFee);
-    }
+    // // @notice Set execution fee for actionId
+    // function setExecutionFee(uint256 actionId, uint256 executionFee) external _onlyAdmin_ {
+    //     GatewayHelper.setExecutionFee(_executionFees, actionId, executionFee);
+    // }
 
-    function setDChainExecutionFeePerRequest(uint256 dChainExecutionFeePerRequest) external _onlyAdmin_ {
-        GatewayHelper.setDChainExecutionFeePerRequest(_gatewayStates, dChainExecutionFeePerRequest);
-    }
+    // function setDChainExecutionFeePerRequest(uint256 dChainExecutionFeePerRequest) external _onlyAdmin_ {
+    //     GatewayHelper.setDChainExecutionFeePerRequest(_gatewayStates, dChainExecutionFeePerRequest);
+    // }
 
     // @notic Claim dChain executionFee to account `to`
     function claimDChainExecutionFee(address to) external _onlyAdmin_ {
@@ -299,7 +299,7 @@ contract GatewayImplementation is GatewayStorage {
         }
         _checkBTokenInitialized(bToken);
 
-        Data memory data = _getData(msg.sender, lTokenId, bToken);
+        Data memory data = _getDataAndCheckBTokenConsistency(msg.sender, lTokenId, bToken);
 
         uint256 ethAmount = _receiveExecutionFee(lTokenId, _executionFees[I.ACTION_REQUESTADDLIQUIDITY]);
         if (bToken == tokenETH) {
@@ -343,14 +343,23 @@ contract GatewayImplementation is GatewayStorage {
             revert InvalidBAmount();
         }
 
-        Data memory data = _getData(msg.sender, lTokenId, bToken);
+        Data memory data = _getData(msg.sender, lTokenId, _dTokenStates[lTokenId].getAddress(I.D_BTOKEN));
+
         _getExParams(data);
         uint256 oldLiquidity = _getDTokenLiquidity(data);
-        uint256 newLiquidity = _getDTokenLiquidityWithRemove(data, bAmount);
+        uint256 newLiquidity;
+        if (data.bToken == bToken) {
+            newLiquidity = _getDTokenLiquidityWithRemove(data, bAmount);
+        } else if (bToken == tokenB0) {
+            newLiquidity = _getDTokenLiquidityWithRemoveB0(data, bAmount);
+        } else {
+            revert InvalidBToken();
+        }
         if (newLiquidity <= oldLiquidity / 100) {
             newLiquidity = 0;
         }
 
+        _dTokenStates[lTokenId].set(I.D_CURRENTOPERATETOKEN, bToken);
         uint256 requestId = _incrementRequestId(lTokenId);
         emit RequestUpdateLiquidity(
             requestId,
@@ -381,7 +390,7 @@ contract GatewayImplementation is GatewayStorage {
         }
         _checkBTokenInitialized(bToken);
 
-        Data memory data = _getData(msg.sender, pTokenId, bToken);
+        Data memory data = _getDataAndCheckBTokenConsistency(msg.sender, pTokenId, bToken);
 
         if (bToken == tokenETH) {
             if (bAmount > msg.value) {
@@ -410,6 +419,14 @@ contract GatewayImplementation is GatewayStorage {
         return pTokenId;
     }
 
+    function requestAddMarginB0(uint256 pTokenId, uint256 b0Amount) external {
+        _checkPTokenIdOwner(pTokenId, msg.sender);
+        tokenB0.transferIn(msg.sender, b0Amount);
+        vault0.deposit(uint256(0), b0Amount);
+        int256 curB0Amount = _dTokenStates[pTokenId].getInt(I.D_B0AMOUNT);
+        _dTokenStates[pTokenId].set(I.D_B0AMOUNT, curB0Amount + b0Amount.utoi());
+    }
+
     /**
      * @notice Request to remove margin with specified base token.
      * @param pTokenId The unique identifier of the PToken.
@@ -424,7 +441,7 @@ contract GatewayImplementation is GatewayStorage {
             revert InvalidBAmount();
         }
 
-        Data memory data = _getData(msg.sender, pTokenId, bToken);
+        Data memory data = _getDataAndCheckBTokenConsistency(msg.sender, pTokenId, bToken);
         _getExParams(data);
         uint256 oldMargin = _getDTokenLiquidity(data);
         uint256 newMargin = _getDTokenLiquidityWithRemove(data, bAmount);
@@ -454,7 +471,7 @@ contract GatewayImplementation is GatewayStorage {
 
         _receiveExecutionFee(pTokenId, _executionFees[I.ACTION_REQUESTTRADE]);
 
-        Data memory data = _getData(msg.sender, pTokenId, _dTokenStates[pTokenId].getAddress(I.D_BTOKEN));
+        Data memory data = _getDataAndCheckBTokenConsistency(msg.sender, pTokenId, _dTokenStates[pTokenId].getAddress(I.D_BTOKEN));
         _getExParams(data);
         uint256 realMoneyMargin = _getDTokenLiquidity(data);
 
@@ -475,7 +492,7 @@ contract GatewayImplementation is GatewayStorage {
      * @param pTokenId The unique identifier of the PToken.
      */
     function requestLiquidate(uint256 pTokenId) external {
-        Data memory data = _getData(pToken.ownerOf(pTokenId), pTokenId, _dTokenStates[pTokenId].getAddress(I.D_BTOKEN));
+        Data memory data = _getDataAndCheckBTokenConsistency(pToken.ownerOf(pTokenId), pTokenId, _dTokenStates[pTokenId].getAddress(I.D_BTOKEN));
         _getExParams(data);
         uint256 realMoneyMargin = _getDTokenLiquidity(data);
 
@@ -538,7 +555,7 @@ contract GatewayImplementation is GatewayStorage {
             revert InvalidBAmount();
         }
 
-        Data memory data = _getData(msg.sender, pTokenId, bToken);
+        Data memory data = _getDataAndCheckBTokenConsistency(msg.sender, pTokenId, bToken);
         _getExParams(data);
         uint256 oldMargin = _getDTokenLiquidity(data);
         uint256 newMargin = _getDTokenLiquidityWithRemove(data, bAmount);
@@ -572,15 +589,26 @@ contract GatewayImplementation is GatewayStorage {
         _updateLiquidity(v.lTokenId, v.liquidity, v.totalLiquidity);
 
         // Cumulate unsettled PNL to b0Amount
-        Data memory data = _getData(lToken.ownerOf(v.lTokenId), v.lTokenId, _dTokenStates[v.lTokenId].getAddress(I.D_BTOKEN));
+        Data memory data = _getDataAndCheckBTokenConsistency(lToken.ownerOf(v.lTokenId), v.lTokenId, _dTokenStates[v.lTokenId].getAddress(I.D_BTOKEN));
         int256 diff = v.cumulativePnlOnEngine.minusUnchecked(data.lastCumulativePnlOnEngine);
         data.b0Amount += diff.rescaleDown(18, decimalsB0);
         data.lastCumulativePnlOnEngine = v.cumulativePnlOnEngine;
 
         uint256 bAmountRemoved;
+        address operateToken = data.bToken;
         if (v.bAmountToRemove != 0) {
-            _getExParams(data);
-            bAmountRemoved = _transferOut(data, v.liquidity == 0 ? type(uint256).max : v.bAmountToRemove, false);
+            operateToken = _dTokenStates[v.lTokenId].getAddress(I.D_CURRENTOPERATETOKEN);
+            if (data.bToken == operateToken) {
+                _getExParams(data);
+                bAmountRemoved = _transferOut(data, v.liquidity == 0 ? type(uint256).max : v.bAmountToRemove, false);
+            } else {
+                require(operateToken == tokenB0);
+                if (data.b0Amount > 0) {
+                    bAmountRemoved = vault0.redeem(uint256(0), SafeMath.min(v.bAmountToRemove, data.b0Amount.itou()));
+                    data.b0Amount -= bAmountRemoved.utoi();
+                    tokenB0.transferOut(data.account, bAmountRemoved);
+                }
+            }
         }
 
         _saveData(data);
@@ -602,7 +630,7 @@ contract GatewayImplementation is GatewayStorage {
                 v.lTokenId,
                 v.liquidity,
                 v.totalLiquidity,
-                data.bToken,
+                operateToken,
                 bAmountRemoved
             );
         }
@@ -619,7 +647,7 @@ contract GatewayImplementation is GatewayStorage {
         _checkRequestId(v.pTokenId, v.requestId);
 
         // Cumulate unsettled PNL to b0Amount
-        Data memory data = _getData(pToken.ownerOf(v.pTokenId), v.pTokenId, _dTokenStates[v.pTokenId].getAddress(I.D_BTOKEN));
+        Data memory data = _getDataAndCheckBTokenConsistency(pToken.ownerOf(v.pTokenId), v.pTokenId, _dTokenStates[v.pTokenId].getAddress(I.D_BTOKEN));
         int256 diff = v.cumulativePnlOnEngine.minusUnchecked(data.lastCumulativePnlOnEngine);
         data.b0Amount += diff.rescaleDown(18, decimalsB0);
         data.lastCumulativePnlOnEngine = v.cumulativePnlOnEngine;
@@ -653,7 +681,7 @@ contract GatewayImplementation is GatewayStorage {
         IGateway.VarOnExecuteLiquidate memory v = abi.decode(eventData, (IGateway.VarOnExecuteLiquidate));
 
         // Cumulate unsettled PNL to b0Amount
-        Data memory data = _getData(pToken.ownerOf(v.pTokenId), v.pTokenId, _dTokenStates[v.pTokenId].getAddress(I.D_BTOKEN));
+        Data memory data = _getDataAndCheckBTokenConsistency(pToken.ownerOf(v.pTokenId), v.pTokenId, _dTokenStates[v.pTokenId].getAddress(I.D_BTOKEN));
         int256 diff = v.cumulativePnlOnEngine.minusUnchecked(data.lastCumulativePnlOnEngine);
         data.b0Amount += diff.rescaleDown(18, decimalsB0);
         data.lastCumulativePnlOnEngine = v.cumulativePnlOnEngine;
@@ -767,7 +795,10 @@ contract GatewayImplementation is GatewayStorage {
 
         data.b0Amount = _dTokenStates[dTokenId].getInt(I.D_B0AMOUNT);
         data.lastCumulativePnlOnEngine = _dTokenStates[dTokenId].getInt(I.D_LASTCUMULATIVEPNLONENGINE);
+    }
 
+    function _getDataAndCheckBTokenConsistency(address account, uint256 dTokenId, address bToken) internal view returns (Data memory data) {
+        data = _getData(account, dTokenId, bToken);
         _checkBTokenConsistency(dTokenId, bToken);
     }
 
@@ -907,20 +938,37 @@ contract GatewayImplementation is GatewayStorage {
                     uint256 b0Shortage = (bAmount - bAmountInVault) * data.bPrice / UONE;
                     uint256 b0Amount = data.b0Amount.itou();
                     if (b0Amount > b0Shortage) {
-                        liquidity = (b0Amount - b0Shortage).rescale(decimalsB0, 18);
+                        liquidity = (b0Amount - b0Shortage);
                     }
                 }
             } else {
                 uint256 b0Excessive = (bAmountInVault - bAmount) * data.bPrice / UONE * data.collateralFactor / UONE; // discounted
                 if (data.b0Amount >= 0) {
-                    liquidity = b0Excessive.add(data.b0Amount).rescale(decimalsB0, 18);
+                    liquidity = b0Excessive.add(data.b0Amount);
                 } else {
                     uint256 b0Shortage = (-data.b0Amount).itou();
                     if (b0Excessive > b0Shortage) {
-                        liquidity = (b0Excessive - b0Shortage).rescale(decimalsB0, 18);
+                        liquidity = (b0Excessive - b0Shortage);
                     }
                 }
             }
+            if (liquidity > 0) {
+                liquidity = liquidity.rescale(decimalsB0, 18);
+            }
+        }
+    }
+
+    function _getDTokenLiquidityWithRemoveB0(Data memory data, uint256 b0AmountToRemove) internal view returns (uint256 liquidity) {
+        uint256 bAmountInVault = IVault(data.vault).getBalance(data.dTokenId);
+        uint256 b0ValueOfBAmountInVault = bAmountInVault * data.bPrice / UONE * data.collateralFactor / UONE; // discounted
+        uint256 b0Total;
+        if (data.b0Amount >= 0) {
+            b0Total = b0ValueOfBAmountInVault.add(data.b0Amount);
+        } else {
+            b0Total = b0ValueOfBAmountInVault - (-data.b0Amount).itou();
+        }
+        if (b0Total > b0AmountToRemove) {
+            liquidity = (b0Total - b0AmountToRemove).rescale(decimalsB0, 18);
         }
     }
 
