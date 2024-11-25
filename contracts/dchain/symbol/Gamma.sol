@@ -414,19 +414,26 @@ library Gamma {
             revert MarkExceedsLimit();
         }
 
-        if (data.tdPowerVolume == 0) {
-            s.positionChange = 1;
-        } else if (data.tdPowerVolume + v.tradeVolume == 0) {
-            s.positionChange = -1;
-        } else {
+        {
             int256 volume1 = data.tdPowerVolume;
             int256 volume2 = data.tdPowerVolume + v.tradeVolume;
-            if (volume1 > 0 && volume2 > 0 || volume1 < 0 && volume2 < 0) {
+
+            if (volume1 == 0) {
+                s.positionChange = 1; // new open, set bit 0
+            } else if (volume2 == 0) {
+                s.positionChange = 2; // full close, set bit 1
+            } else if (volume1 > 0 && volume2 > 0 || volume1 < 0 && volume2 < 0) {
                 if (volume2.abs() > volume1.abs()) {
-                    s.positionChange = 2;
+                    s.positionChange = 4; // increase position, set bit 2
                 } else {
-                    s.positionChange = -2;
+                    s.positionChange = 8; // decrease position, set bit 3
                 }
+            }
+
+            if (data.netPowerVolume.abs() > (data.netPowerVolume - v.tradeVolume).abs()) {
+                s.positionChange += 16; // increase net volume, set bit 4
+            } else {
+                s.positionChange += 32; // decrease net volume, set bit 5
             }
         }
 
