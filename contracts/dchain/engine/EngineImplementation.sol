@@ -392,17 +392,14 @@ contract EngineImplementation is EngineStorage {
 
         data.cumulativePnl = data.cumulativePnl.minusUnchecked(s.traderFunding + s.tradeFee + s.tradeRealizedCost);
 
-        if (
-            (s.positionChange & 2) == 0 && // not full close
-            (s.positionChange & 8) == 0    // not decrease position
-        ) {
+        if ((s.positionChange & 1) != 0) { // not decrease volume
             int256 realizedPnl = data.cumulativePnl.minusUnchecked(v.lastCumulativePnlOnEngine);
             int256 requiredRealMoneyMargin = s.traderInitialMarginRequired - s.traderPnl;
             if (v.realMoneyMargin.utoi() + realizedPnl < requiredRealMoneyMargin) {
                 revert InsufficientMargin();
             }
 
-            if ((s.positionChange & 32) == 0) { // not decrease net volume
+            if ((s.positionChange & 4) != 0) { // not decrease net volume
                 if ((data.totalLiquidity + data.lpsPnl) * ONE < s.initialMarginRequired * initialMarginMultiplier) {
                     revert InsufficientLiquidity();
                 }

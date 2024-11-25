@@ -38,12 +38,9 @@ interface ISymbol {
         int256 tradeCost;
         int256 tradeFee;
         int256 tradeRealizedCost;
-        int256 positionChange; // bit 0: new open (enter)
-                               // bit 1: total close (exit)
-                               // bit 2: increase volume (increase volume)
-                               // bit 3: decrease volume (partial close)
-                               // bit 4: increase net volume abs
-                               // bit 5: decrease net volume abs
+        int256 positionChange; // bit 0: 1: increase volume, 0: decrease volume
+                               // bit 1: 1: full operation, 0: non full operation (full operation is a new open, or a full close)
+                               // bit 2: 1: increase net volume abs 0: decrease net volume abs
     }
 
     struct SettlementOnLiquidate {

@@ -404,22 +404,23 @@ library Option {
             int256 volume1 = data.tdVolume;
             int256 volume2 = data.tdVolume + v.tradeVolume;
 
-            if (volume1 == 0) {
-                s.positionChange = 1; // new open, set bit 0
-            } else if (volume2 == 0) {
-                s.positionChange = 2; // full close, set bit 1
-            } else if (volume1 > 0 && volume2 > 0 || volume1 < 0 && volume2 < 0) {
-                if (volume2.abs() > volume1.abs()) {
-                    s.positionChange = 4; // increase position, set bit 2
+            if (volume1 == 0 || volume2 == 0) { // full operation
+                s.positionChange += 2;
+                if (volume2 != 0) {
+                    s.positionChange += 1; // increase volume
+                }
+            } else {
+                if (volume1 > 0 && volume2 > 0 || volume1 < 0 && volume2 < 0) {
+                    if (volume2.abs() > volume1.abs()) {
+                        s.positionChange += 1; // increase volume
+                    }
                 } else {
-                    s.positionChange = 8; // decrease position, set bit 3
+                    s.positionChange += 1; // increase volume
                 }
             }
 
             if (data.netVolume.abs() > (data.netVolume - v.tradeVolume).abs()) {
-                s.positionChange += 16; // increase net volume, set bit 4
-            } else {
-                s.positionChange += 32; // decrease net volume, set bit 5
+                s.positionChange += 4; // increase net volume, set bit 4
             }
         }
 
