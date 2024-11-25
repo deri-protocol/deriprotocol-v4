@@ -422,7 +422,7 @@ library Gamma {
                 s.positionChange += 2;
             }
 
-            if (!(volume2 >= 0 && volume1 > volume2 || volume2 <= 0 and volume1 < volume2)) { // increase volume
+            if (!((volume2 >= 0 && volume1 > volume2) || (volume2 <= 0 && volume1 < volume2))) { // increase volume
                 s.positionChange += 1;
             }
 
