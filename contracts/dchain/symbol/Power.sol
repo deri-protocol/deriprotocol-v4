@@ -384,17 +384,10 @@ library Power {
 
             if (volume1 == 0 || volume2 == 0) { // full operation
                 s.positionChange += 2;
-                if (volume2 != 0) {
-                    s.positionChange += 1; // increase volume
-                }
-            } else {
-                if (volume1 > 0 && volume2 > 0 || volume1 < 0 && volume2 < 0) {
-                    if (volume2.abs() > volume1.abs()) {
-                        s.positionChange += 1; // increase volume
-                    }
-                } else {
-                    s.positionChange += 1; // increase volume
-                }
+            }
+
+            if (!(volume2 >= 0 && volume1 > volume2 || volume2 <= 0 and volume1 < volume2)) { // increase volume
+                s.positionChange += 1;
             }
 
             if (data.netVolume.abs() > (data.netVolume - v.tradeVolume).abs()) {
