@@ -414,19 +414,20 @@ library Gamma {
             revert MarkExceedsLimit();
         }
 
-        if (data.tdPowerVolume == 0) {
-            s.positionChange = 1;
-        } else if (data.tdPowerVolume + v.tradeVolume == 0) {
-            s.positionChange = -1;
-        } else {
+        {
             int256 volume1 = data.tdPowerVolume;
             int256 volume2 = data.tdPowerVolume + v.tradeVolume;
-            if (volume1 > 0 && volume2 > 0 || volume1 < 0 && volume2 < 0) {
-                if (volume2.abs() > volume1.abs()) {
-                    s.positionChange = 2;
-                } else {
-                    s.positionChange = -2;
-                }
+
+            if (volume1 == 0 || volume2 == 0) { // full operation, set bit 1
+                s.positionChange += 2;
+            }
+
+            if (!((volume2 >= 0 && volume1 > volume2) || (volume2 <= 0 && volume1 < volume2))) { // increase volume, set bit 0
+                s.positionChange += 1;
+            }
+
+            if (data.netPowerVolume.abs() > (data.netPowerVolume - v.tradeVolume).abs()) {
+                s.positionChange += 4; // increase net volume, set bit 2
             }
         }
 

@@ -294,12 +294,14 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
         initialMarginRequired += diffInitialMarginRequired;
         ss.initialMarginRequired = initialMarginRequired;
 
-        if (s2.positionChange == 1) {
-            _pTokenIds[symbolId].add(pTokenId);
-            _tdSymbolIds[pTokenId].add(symbolId);
-        } else if (s2.positionChange == -1) {
-            _pTokenIds[symbolId].remove(pTokenId);
-            _tdSymbolIds[pTokenId].remove(symbolId);
+        if ((s2.positionChange & 2) != 0) {
+            if ((s2.positionChange & 1) != 0) {
+                _pTokenIds[symbolId].add(pTokenId);
+                _tdSymbolIds[pTokenId].add(symbolId);
+            } else {
+                _pTokenIds[symbolId].remove(pTokenId);
+                _tdSymbolIds[pTokenId].remove(symbolId);
+            }
         }
     }
 
