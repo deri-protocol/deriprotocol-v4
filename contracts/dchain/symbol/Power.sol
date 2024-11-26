@@ -382,16 +382,16 @@ library Power {
             int256 volume1 = data.tdVolume;
             int256 volume2 = data.tdVolume + v.tradeVolume;
 
-            if (volume1 == 0 || volume2 == 0) { // full operation
+            if (volume1 == 0 || volume2 == 0) { // full operation, set bit 1
                 s.positionChange += 2;
             }
 
-            if (!((volume2 >= 0 && volume1 > volume2) || (volume2 <= 0 && volume1 < volume2))) { // increase volume
+            if (!((volume2 >= 0 && volume1 > volume2) || (volume2 <= 0 && volume1 < volume2))) { // increase volume, set bit 0
                 s.positionChange += 1;
             }
 
             if (data.netVolume.abs() > (data.netVolume - v.tradeVolume).abs()) {
-                s.positionChange += 4; // increase net volume, set bit 4
+                s.positionChange += 4; // increase net volume, set bit 2
             }
         }
 
