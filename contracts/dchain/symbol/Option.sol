@@ -447,8 +447,8 @@ library Option {
         {
             int256 traderInitialMarginPerVolume = SafeMath.max(
                 v.indexPrice * state.getInt(S_MININITIALMARGINRATIO) / ONE,
-                data.initialMarginPerVolume * openInterestMultiplier / ONE
-            );
+                data.initialMarginPerVolume
+            ) * openInterestMultiplier / ONE;
             s.traderPnl = data.tdVolume * data.theoreticalPrice / ONE - data.tdCost;
             s.traderInitialMarginRequired = data.tdVolume.abs() * traderInitialMarginPerVolume / ONE;
         }
