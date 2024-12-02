@@ -88,8 +88,9 @@ library Futures {
 
     int256 constant ONE = 1e18;
     int256 constant r = 109500000000000000; // risk-free interest rate
-    int256 constant openInterestMultiplierLimit1 = ONE * 2; // can only decrease net volume when openInterestMultiplier >= openInterestMultiplierLimit1
-    int256 constant openInterestMultiplierLimit2 = ONE * 4; // revert when openInterestMultiplier >= openInterestMultiplierLimit2
+    int256 constant openInterestBoundCoefficient = ONE * 2;
+    int256 constant openInterestMultiplierLimit1 = openInterestBoundCoefficient * 2; // can only decrease net volume when openInterestMultiplier >= openInterestMultiplierLimit1
+    int256 constant openInterestMultiplierLimit2 = openInterestBoundCoefficient * 4; // revert when openInterestMultiplier >= openInterestMultiplierLimit2
 
     //================================================================================
     // Getters
@@ -680,7 +681,7 @@ library Futures {
     ) internal pure returns (int256)
     {
         int256 openInterestBound = initialMarginRatio * liquidity / alpha * ONE / indexPrice;
-        return SafeMath.max(openVolume * ONE / openInterestBound, ONE);
+        return SafeMath.max(openVolume * openInterestBoundCoefficient / openInterestBound, ONE);
     }
 
     function _getInitialMarginRequired(Data memory data, int256 indexPrice) internal pure {
