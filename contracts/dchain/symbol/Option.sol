@@ -754,8 +754,8 @@ library Option {
     ) internal pure returns (int256)
     {
         int256 openInterestBound = SafeMath.max(initialMarginRatio, minInitialMarginRatio * ONE / delta.abs())
-                                 * liquidity / alpha * ONE / indexPrice;
-        return SafeMath.max(openVolume * openInterestBoundCoefficient / openInterestBound, ONE);
+                                 * liquidity / alpha * ONE / indexPrice * ONE / openInterestBoundCoefficient;
+        return SafeMath.max(openVolume * ONE / openInterestBound, ONE);
     }
 
     function _getInitialMarginRequired(Data memory data, int256 indexPrice) internal pure {

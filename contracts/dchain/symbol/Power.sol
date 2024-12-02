@@ -703,8 +703,8 @@ library Power {
         int256 liquidity
     ) internal pure returns (int256)
     {
-        int256 openInterestBound = initialMarginRatio * liquidity / alpha * ONE / theoreticalPrice / 2;
-        return SafeMath.max(openVolume * openInterestBoundCoefficient / openInterestBound, ONE);
+        int256 openInterestBound = initialMarginRatio * liquidity / alpha * ONE / theoreticalPrice / 2 * ONE / openInterestBoundCoefficient;
+        return SafeMath.max(openVolume * ONE / openInterestBound, ONE);
     }
 
     function _getInitialMarginRequired(Data memory data) internal pure {

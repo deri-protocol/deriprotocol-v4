@@ -680,8 +680,8 @@ library Futures {
         int256 liquidity
     ) internal pure returns (int256)
     {
-        int256 openInterestBound = initialMarginRatio * liquidity / alpha * ONE / indexPrice;
-        return SafeMath.max(openVolume * openInterestBoundCoefficient / openInterestBound, ONE);
+        int256 openInterestBound = initialMarginRatio * liquidity / alpha * ONE / indexPrice * ONE / openInterestBoundCoefficient;
+        return SafeMath.max(openVolume * ONE / openInterestBound, ONE);
     }
 
     function _getInitialMarginRequired(Data memory data, int256 indexPrice) internal pure {
