@@ -18,7 +18,8 @@ library Power {
     error CloseOnly();
     error SlippageExceedsLimit();
     error MarkExceedsLimit();
-    error OpenInterestExceedsLimit();
+    error OpenInterestExceedsLimit1();
+    error OpenInterestExceedsLimit2();
     error StartingPriceShiftExceedsLimit();
     error NoVolumeToForceClose();
 
@@ -89,6 +90,9 @@ library Power {
 
     int256 constant ONE = 1e18;
     int256 constant r = 109500000000000000; // risk-free interest rate
+    int256 constant openInterestBoundCoefficient = ONE * 2;
+    int256 constant openInterestMultiplierLimit1 = openInterestBoundCoefficient * 2; // can only decrease net volume when openInterestMultiplier >= openInterestMultiplierLimit1
+    int256 constant openInterestMultiplierLimit2 = openInterestBoundCoefficient * 4; // revert when openInterestMultiplier >= openInterestMultiplierLimit2
 
     //================================================================================
     // Getters
@@ -279,8 +283,15 @@ library Power {
             s.traderFunding = data.tdVolume * diff / ONE;
         }
 
+        int256 openInterestMultiplier = _getOpenInterestMultiplier(
+            data.openVolume,
+            data.alpha,
+            data.initialMarginRatio,
+            data.theoreticalPrice,
+            v.liquidity
+        );
         s.traderPnl = data.tdVolume * data.theoreticalPrice / ONE - data.tdCost;
-        s.traderInitialMarginRequired = data.tdVolume.abs() * data.initialMarginPerVolume / ONE;
+        s.traderInitialMarginRequired = data.tdVolume.abs() * data.initialMarginPerVolume / ONE * openInterestMultiplier / ONE;
 
         state.set(S_LASTTIMESTAMP, data.curTimestamp);
         state.set(S_LASTINDEXPRICE, v.indexPrice);
@@ -360,23 +371,23 @@ library Power {
 
         data.netVolume += v.tradeVolume;
         data.netCost += s.tradeCost - s.tradeRealizedCost;
-        _getTradersPnl(data);
-        _getInitialMarginRequired(data);
 
         if (DpmmPower.calculateMarkPrice(data.theoreticalPrice, data.k, data.netVolume) <= 0) {
             revert MarkExceedsLimit();
         }
 
-        {
-            int256 diffOpenVolume = (data.tdVolume + v.tradeVolume).abs() - data.tdVolume.abs();
-            data.openVolume += diffOpenVolume;
-            if (diffOpenVolume > 0) {
-                int256 openInterestRatio = data.theoreticalPrice * data.openVolume / v.liquidity;
-                if (data.initialMarginRatio * ONE < 2 * data.alpha * openInterestRatio) {
-                    revert OpenInterestExceedsLimit();
-                }
-            }
-        }
+        int256 diffOpenVolume = (data.tdVolume + v.tradeVolume).abs() - data.tdVolume.abs();
+        data.openVolume += diffOpenVolume;
+        int256 openInterestMultiplier = _getOpenInterestMultiplier(
+            data.openVolume,
+            data.alpha,
+            data.initialMarginRatio,
+            data.theoreticalPrice,
+            v.liquidity
+        );
+
+        _getTradersPnl(data);
+        _getInitialMarginRequired(data);
 
         {
             int256 volume1 = data.tdVolume;
@@ -395,6 +406,14 @@ library Power {
             }
         }
 
+        if (diffOpenVolume > 0) {
+            if (openInterestMultiplier >= openInterestMultiplierLimit2) {
+                revert OpenInterestExceedsLimit2();
+            } else if (openInterestMultiplier >= openInterestMultiplierLimit1 && (s.positionChange & 4) != 0) {
+                revert OpenInterestExceedsLimit1();
+            }
+        }
+
         data.tdVolume += v.tradeVolume;
         data.tdCost += s.tradeCost - s.tradeRealizedCost;
         data.tdCumulativeFundingPerVolume = data.cumulativeFundingPerVolume;
@@ -404,7 +423,7 @@ library Power {
         s.diffInitialMarginRequired = data.initialMarginRequired - state.getInt(S_INITIALMARGINREQUIRED);
 
         s.traderPnl = data.tdVolume * data.theoreticalPrice / ONE - data.tdCost;
-        s.traderInitialMarginRequired = data.tdVolume.abs() * data.initialMarginPerVolume / ONE;
+        s.traderInitialMarginRequired = data.tdVolume.abs() * data.initialMarginPerVolume / ONE * openInterestMultiplier / ONE;
 
         state.set(S_LASTTIMESTAMP, data.curTimestamp);
         state.set(S_LASTINDEXPRICE, v.indexPrice);
@@ -632,10 +651,7 @@ library Power {
         }
         data.netCost = state.getInt(S_NETCOST);
         data.cumulativeFundingPerVolume = state.getInt(S_CUMULATIVEFUNDINGPERVOLUME);
-        if (action == ACTION_TRADE || action == ACTION_LIQUIDATE) {
-            data.openVolume = state.getInt(S_OPENVOLUME);
-        }
-
+        data.openVolume = state.getInt(S_OPENVOLUME);
         data.fundingPeriod = state.getInt(S_FUNDINGPERIOD);
         data.alpha = state.getInt(S_ALPHA);
         data.initialMarginRatio = state.getInt(S_INITIALMARGINRATIO);
@@ -677,6 +693,18 @@ library Power {
         data.tradersPnl = -(DpmmPower.calculateCost(
             data.theoreticalPrice, data.k, data.netVolume, -data.netVolume
         ) + data.netCost);
+    }
+
+    function _getOpenInterestMultiplier(
+        int256 openVolume,
+        int256 alpha,
+        int256 initialMarginRatio,
+        int256 theoreticalPrice,
+        int256 liquidity
+    ) internal pure returns (int256)
+    {
+        int256 openInterestBound = initialMarginRatio * liquidity / alpha * ONE / theoreticalPrice / 2 * ONE / openInterestBoundCoefficient;
+        return SafeMath.max(openVolume * ONE / openInterestBound, ONE);
     }
 
     function _getInitialMarginRequired(Data memory data) internal pure {
