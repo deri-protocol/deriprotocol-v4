@@ -28,6 +28,7 @@ library GatewayHelper {
     error BTokenNoOracle();
     error InvalidBToken();
     error InvalidSignature();
+    error InsufficientExecutionFee();
 
     event AddBToken(address bToken, address vault, bytes32 oracleId, uint256 collateralFactor);
 
@@ -42,6 +43,7 @@ library GatewayHelper {
     );
 
     uint256 constant UONE = 1e18;
+    int256 constant ONE = 1e18;
     address constant tokenETH = address(1);
 
     //================================================================================
@@ -356,6 +358,101 @@ library GatewayHelper {
         }
 
         return b0AmountIn;
+    }
+
+    function receiveExecutionFee(
+        mapping(uint8 => bytes32) storage gatewayStates,
+        mapping(uint256 => mapping(uint8 => bytes32)) storage dTokenStates,
+        uint256 dTokenId,
+        uint256 executionFee
+    ) external returns (uint256)
+    {
+        uint256 dChainExecutionFee = gatewayStates.getUint(I.S_DCHAINEXECUTIONFEEPERREQUEST);
+        if (msg.value < executionFee) {
+            revert InsufficientExecutionFee();
+        }
+        uint256 iChainExecutionFee = executionFee - dChainExecutionFee;
+
+        uint256 totalIChainExecutionFee = gatewayStates.getUint(I.S_TOTALICHAINEXECUTIONFEE) + iChainExecutionFee;
+        gatewayStates.set(I.S_TOTALICHAINEXECUTIONFEE,  totalIChainExecutionFee);
+
+        uint256 lastRequestIChainExecutionFee = dTokenStates[dTokenId].getUint(I.D_LASTREQUESTICHAINEXECUTIONFEE);
+        uint256 cumulativeUnusedIChainExecutionFee = dTokenStates[dTokenId].getUint(I.D_CUMULATIVEUNUSEDICHAINEXECUTIONFEE);
+        cumulativeUnusedIChainExecutionFee += lastRequestIChainExecutionFee;
+        lastRequestIChainExecutionFee = iChainExecutionFee;
+        dTokenStates[dTokenId].set(I.D_LASTREQUESTICHAINEXECUTIONFEE, lastRequestIChainExecutionFee);
+        dTokenStates[dTokenId].set(I.D_CUMULATIVEUNUSEDICHAINEXECUTIONFEE, cumulativeUnusedIChainExecutionFee);
+
+        return msg.value - executionFee;
+    }
+
+    function transferLastRequestIChainExecutionFee(
+        mapping(uint8 => bytes32) storage gatewayStates,
+        mapping(uint256 => mapping(uint8 => bytes32)) storage dTokenStates,
+        uint256 dTokenId,
+        address to
+    ) external
+    {
+        uint256 lastRequestIChainExecutionFee = dTokenStates[dTokenId].getUint(I.D_LASTREQUESTICHAINEXECUTIONFEE);
+
+        if (lastRequestIChainExecutionFee > 0) {
+            uint256 totalIChainExecutionFee = gatewayStates.getUint(I.S_TOTALICHAINEXECUTIONFEE);
+            totalIChainExecutionFee -= lastRequestIChainExecutionFee;
+            gatewayStates.set(I.S_TOTALICHAINEXECUTIONFEE, totalIChainExecutionFee);
+
+            dTokenStates[dTokenId].del(I.D_LASTREQUESTICHAINEXECUTIONFEE);
+
+            tokenETH.transferOut(to, lastRequestIChainExecutionFee);
+        }
+    }
+
+    function calculateReward(
+        int256 lpPnl,
+        int256 minLiquidationReward,
+        int256 maxLiquidationReward,
+        int256 liquidationRewardCutRatio
+    ) external pure returns (int256 reward)
+    {
+        if (lpPnl <= minLiquidationReward) {
+            reward = minLiquidationReward;
+        } else {
+            reward = SafeMath.min(
+                (lpPnl - minLiquidationReward) * liquidationRewardCutRatio / ONE + minLiquidationReward,
+                maxLiquidationReward
+            );
+        }
+    }
+
+    function processReward(
+        address tokenB0,
+        IVault vault0,
+        int256 reward,
+        uint256 b0AmountIn,
+        address requester,
+        address executor,
+        address finisher
+    ) external returns (int256, uint256)
+    {
+        uint256 uReward = reward.itou();
+        if (uReward <= b0AmountIn) {
+            b0AmountIn -= uReward;
+        } else {
+            uint256 b0Redeemed = vault0.redeem(uint256(0), uReward - b0AmountIn);
+            uReward = b0AmountIn + b0Redeemed;
+            reward = uReward.utoi();
+            b0AmountIn = 0;
+        }
+
+        if (uReward > 0) {
+            uint256 rewardRequester = uReward * 50 / 100; // 50%
+            uint256 rewardExecutor = uReward * 30 / 100;  // 30%
+            uint256 rewardFinisher = uReward - rewardRequester - rewardExecutor; // 20%
+            tokenB0.transferOut(requester, rewardRequester);
+            tokenB0.transferOut(executor, rewardExecutor);
+            tokenB0.transferOut(finisher, rewardFinisher);
+        }
+
+        return (reward, b0AmountIn);
     }
 
 }

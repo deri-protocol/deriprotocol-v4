@@ -31,7 +31,6 @@ contract GatewayImplementation is GatewayStorage {
     error InvalidRequestId();
     error InsufficientMargin();
     error InsufficientB0();
-    error InsufficientExecutionFee();
 
     event RequestUpdateLiquidity(
         uint256 requestId,
@@ -677,7 +676,7 @@ contract GatewayImplementation is GatewayStorage {
      * @param signature The signature used to verify the event data.
      */
     function finishLiquidate(bytes memory eventData, bytes memory signature) external _reentryLock_ {
-        GatewayHelper.verifyEventData(eventData, signature, 128, dChainEventSigner);
+        GatewayHelper.verifyEventData(eventData, signature, 224, dChainEventSigner);
         IGateway.VarOnExecuteLiquidate memory v = abi.decode(eventData, (IGateway.VarOnExecuteLiquidate));
 
         // Cumulate unsettled PNL to b0Amount
@@ -711,29 +710,9 @@ contract GatewayImplementation is GatewayStorage {
         int256 reward;
 
         // Calculate liquidator's reward
-        {
-            if (lpPnl <= minLiquidationReward) {
-                reward = minLiquidationReward;
-            } else {
-                reward = SafeMath.min(
-                    (lpPnl - minLiquidationReward) * liquidationRewardCutRatio / ONE + minLiquidationReward,
-                    maxLiquidationReward
-                );
-            }
-
-            uint256 uReward = reward.itou();
-            if (uReward <= b0AmountIn) {
-                tokenB0.transferOut(msg.sender, uReward);
-                b0AmountIn -= uReward;
-            } else {
-                uint256 b0Redeemed = vault0.redeem(uint256(0), uReward - b0AmountIn);
-                tokenB0.transferOut(msg.sender, b0AmountIn + b0Redeemed);
-                reward = (b0AmountIn + b0Redeemed).utoi();
-                b0AmountIn = 0;
-            }
-
-            lpPnl -= reward;
-        }
+        reward = GatewayHelper.calculateReward(lpPnl, minLiquidationReward, maxLiquidationReward, liquidationRewardCutRatio);
+        (reward, b0AmountIn) = GatewayHelper.processReward(tokenB0, vault0, reward, b0AmountIn, v.requester, v.executor, v.finisher);
+        lpPnl -= reward;
 
         if (b0AmountIn > 0) {
             vault0.deposit(uint256(0), b0AmountIn);
@@ -869,37 +848,11 @@ contract GatewayImplementation is GatewayStorage {
     }
 
     function _receiveExecutionFee(uint256 dTokenId, uint256 executionFee) internal returns (uint256) {
-        uint256 dChainExecutionFee = _gatewayStates.getUint(I.S_DCHAINEXECUTIONFEEPERREQUEST);
-        if (msg.value < executionFee) {
-            revert InsufficientExecutionFee();
-        }
-        uint256 iChainExecutionFee = executionFee - dChainExecutionFee;
-
-        uint256 totalIChainExecutionFee = _gatewayStates.getUint(I.S_TOTALICHAINEXECUTIONFEE) + iChainExecutionFee;
-        _gatewayStates.set(I.S_TOTALICHAINEXECUTIONFEE,  totalIChainExecutionFee);
-
-        uint256 lastRequestIChainExecutionFee = _dTokenStates[dTokenId].getUint(I.D_LASTREQUESTICHAINEXECUTIONFEE);
-        uint256 cumulativeUnusedIChainExecutionFee = _dTokenStates[dTokenId].getUint(I.D_CUMULATIVEUNUSEDICHAINEXECUTIONFEE);
-        cumulativeUnusedIChainExecutionFee += lastRequestIChainExecutionFee;
-        lastRequestIChainExecutionFee = iChainExecutionFee;
-        _dTokenStates[dTokenId].set(I.D_LASTREQUESTICHAINEXECUTIONFEE, lastRequestIChainExecutionFee);
-        _dTokenStates[dTokenId].set(I.D_CUMULATIVEUNUSEDICHAINEXECUTIONFEE, cumulativeUnusedIChainExecutionFee);
-
-        return msg.value - executionFee;
+        return GatewayHelper.receiveExecutionFee(_gatewayStates, _dTokenStates, dTokenId, executionFee);
     }
 
     function _transferLastRequestIChainExecutionFee(uint256 dTokenId, address to) internal {
-        uint256 lastRequestIChainExecutionFee = _dTokenStates[dTokenId].getUint(I.D_LASTREQUESTICHAINEXECUTIONFEE);
-
-        if (lastRequestIChainExecutionFee > 0) {
-            uint256 totalIChainExecutionFee = _gatewayStates.getUint(I.S_TOTALICHAINEXECUTIONFEE);
-            totalIChainExecutionFee -= lastRequestIChainExecutionFee;
-            _gatewayStates.set(I.S_TOTALICHAINEXECUTIONFEE, totalIChainExecutionFee);
-
-            _dTokenStates[dTokenId].del(I.D_LASTREQUESTICHAINEXECUTIONFEE);
-
-            tokenETH.transferOut(to, lastRequestIChainExecutionFee);
-        }
+        GatewayHelper.transferLastRequestIChainExecutionFee(_gatewayStates, _dTokenStates, dTokenId, to);
     }
 
     // @dev bPrice * bAmount / UONE = b0Amount, b0Amount in decimalsB0
