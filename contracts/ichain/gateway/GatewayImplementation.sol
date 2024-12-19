@@ -711,7 +711,7 @@ contract GatewayImplementation is GatewayStorage {
 
         // Calculate liquidator's reward
         reward = GatewayHelper.calculateReward(lpPnl, minLiquidationReward, maxLiquidationReward, liquidationRewardCutRatio);
-        (reward, b0AmountIn) = GatewayHelper.processReward(tokenB0, vault0, reward, b0AmountIn, v.requester, v.executor, v.finisher);
+        (reward, b0AmountIn) = GatewayHelper.processReward(tokenB0, vault0, reward, b0AmountIn, v.executor, v.finisher);
         lpPnl -= reward;
 
         if (b0AmountIn > 0) {

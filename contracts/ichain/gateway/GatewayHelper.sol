@@ -428,7 +428,6 @@ library GatewayHelper {
         IVault vault0,
         int256 reward,
         uint256 b0AmountIn,
-        address requester,
         address executor,
         address finisher
     ) external returns (int256, uint256)
@@ -444,10 +443,8 @@ library GatewayHelper {
         }
 
         if (uReward > 0) {
-            uint256 rewardRequester = uReward * 50 / 100; // 50%
-            uint256 rewardExecutor = uReward * 30 / 100;  // 30%
-            uint256 rewardFinisher = uReward - rewardRequester - rewardExecutor; // 20%
-            tokenB0.transferOut(requester, rewardRequester);
+            uint256 rewardExecutor = uReward * 80 / 100;  // 80%
+            uint256 rewardFinisher = uReward - rewardExecutor; // 20%
             tokenB0.transferOut(executor, rewardExecutor);
             tokenB0.transferOut(finisher, rewardFinisher);
         }
