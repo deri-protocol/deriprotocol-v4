@@ -81,6 +81,9 @@ interface IGateway {
     }
 
     struct VarOnExecuteLiquidate {
+        address requester;
+        address executor;
+        address finisher;
         uint256 requestId;
         uint256 pTokenId;
         int256  cumulativePnlOnEngine;
