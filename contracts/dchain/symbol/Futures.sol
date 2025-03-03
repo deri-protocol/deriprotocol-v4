@@ -282,6 +282,7 @@ library Futures {
                 v.indexPrice,
                 v.liquidity
             );
+            // This PnL is used to calculate the trader's margin requirement, not the actual PnL of this position.
             s.traderPnl = notional - data.tdCost;
             s.traderInitialMarginRequired = notional.abs() * data.initialMarginRatio / ONE * openInterestMultiplier / ONE;
         }

@@ -829,6 +829,7 @@ library Gamma {
         );
     }
 
+    // This PnL is used to calculate the trader's margin requirement, not the actual PnL of this position.
     function _calculateTraderPnl(Data memory data) internal pure returns (int256) {
         int256 powerValue = data.tdPowerVolume * data.powerTheoreticalPrice / ONE;
         int256 realFuturesValue = data.tdRealFuturesVolume * data.curIndexPrice / ONE;
