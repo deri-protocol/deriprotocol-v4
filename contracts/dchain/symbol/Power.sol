@@ -422,6 +422,7 @@ library Power {
         s.diffTradersPnl = data.tradersPnl - state.getInt(S_TRADERSPNL);
         s.diffInitialMarginRequired = data.initialMarginRequired - state.getInt(S_INITIALMARGINREQUIRED);
 
+        // This PnL is used to calculate the trader's margin requirement, not the actual PnL of this position.
         s.traderPnl = data.tdVolume * data.theoreticalPrice / ONE - data.tdCost;
         s.traderInitialMarginRequired = data.tdVolume.abs() * data.initialMarginPerVolume / ONE * openInterestMultiplier / ONE;
 
