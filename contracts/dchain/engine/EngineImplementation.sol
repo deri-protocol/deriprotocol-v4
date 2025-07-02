@@ -353,7 +353,11 @@ contract EngineImplementation is EngineStorage {
         int256 requiredRealMoneyMargin;
         if (s.traderInitialMarginRequired > 0) {
             int256 realizedPnl = data.cumulativePnl.minusUnchecked(v.lastCumulativePnlOnEngine);
-            requiredRealMoneyMargin = SafeMath.max(s.traderInitialMarginRequired - s.traderPnl, int256(0));
+            if (s.traderPnl >= 0) {
+                requiredRealMoneyMargin = s.traderInitialMarginRequired;
+            } else {
+                requiredRealMoneyMargin = s.traderInitialMarginRequired - s.traderPnl;
+            }
             if (v.realMoneyMargin.utoi() + realizedPnl < requiredRealMoneyMargin) {
                 revert InsufficientMargin();
             }
@@ -394,7 +398,12 @@ contract EngineImplementation is EngineStorage {
 
         if ((s.positionChange & 1) != 0) { // not decrease volume
             int256 realizedPnl = data.cumulativePnl.minusUnchecked(v.lastCumulativePnlOnEngine);
-            int256 requiredRealMoneyMargin = s.traderInitialMarginRequired - s.traderPnl;
+            int256 requiredRealMoneyMargin;
+            if (s.traderPnl >= 0) {
+                requiredRealMoneyMargin = s.traderInitialMarginRequired;
+            } else {
+                requiredRealMoneyMargin = s.traderInitialMarginRequired - s.traderPnl;
+            }
             if (v.realMoneyMargin.utoi() + realizedPnl < requiredRealMoneyMargin) {
                 revert InsufficientMargin();
             }
