@@ -187,6 +187,14 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
         }
     }
 
+    function initializeGammaOpenInterest(bytes32 symbolId) external _onlyAdmin_ {
+        Gamma.initializeOpenInterest(
+            _states[symbolId],
+            _positions[symbolId],
+            _pTokenIds[symbolId].values()
+        );
+    }
+
     //================================================================================
     // Settlers
     //================================================================================
