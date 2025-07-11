@@ -80,8 +80,8 @@ library Gamma {
     uint8 constant S_INITIALMARGINREQUIRED                 = 108;
     uint8 constant S_CUMULAITVEFUNDINGPERPOWERVOLUME       = 109;
     uint8 constant S_CUMULATIVEFUNDINGPERREALFUTURESVOLUME = 110;
-    uint8 constant S_POWEROPENVOLUME                       = 111;
-    uint8 constant S_REALFUTURESOPENVOLUME                 = 112;
+    uint8 constant S_POWEROPENINTEREST                     = 111;
+    uint8 constant S_REALFUTURESOPENINTEREST               = 112;
 
     uint8 constant P_POWERVOLUME                           = 1;
     uint8 constant P_REALFUTURESVOLUME                     = 2;
@@ -130,8 +130,8 @@ library Gamma {
         s[19] = state.getBytes32(S_CUMULAITVEFUNDINGPERPOWERVOLUME);
         s[20] = state.getBytes32(S_CUMULATIVEFUNDINGPERREALFUTURESVOLUME);
 
-        s[21] = state.getBytes32(S_POWEROPENVOLUME);
-        s[22] = state.getBytes32(S_REALFUTURESOPENVOLUME);
+        s[21] = state.getBytes32(S_POWEROPENINTEREST);
+        s[22] = state.getBytes32(S_REALFUTURESOPENINTEREST);
     }
 
     function getPosition(mapping(uint8 => bytes32) storage position)
@@ -212,15 +212,15 @@ library Gamma {
         mapping(uint256 => mapping(uint8 => bytes32)) storage positions,
         uint256[] memory pTokenIds
     ) external {
-        int256 powerOpenVolume;
-        int256 realFuturesOpenVolume;
+        int256 powerOpenInterest;
+        int256 realFuturesOpenInterest;
         for (uint256 i = 0; i < pTokenIds.length; i++) {
             uint256 pTokenId = pTokenIds[i];
-            powerOpenVolume += positions[pTokenId].getInt(P_POWERVOLUME).abs();
-            realFuturesOpenVolume += positions[pTokenId].getInt(P_REALFUTURESVOLUME).abs();
+            powerOpenInterest += positions[pTokenId].getInt(P_POWERVOLUME).abs();
+            realFuturesOpenInterest += positions[pTokenId].getInt(P_REALFUTURESVOLUME).abs();
         }
-        state.set(S_POWEROPENVOLUME, powerOpenVolume);
-        state.set(S_REALFUTURESOPENVOLUME, realFuturesOpenVolume);
+        state.set(S_POWEROPENINTEREST, powerOpenInterest);
+        state.set(S_REALFUTURESOPENINTEREST, realFuturesOpenInterest);
     }
 
     //================================================================================
@@ -326,7 +326,7 @@ library Gamma {
             data.realFuturesOpenInterestLimit,
             data.tdRealFuturesVolume
         );
-        s.traderInitialMarginRequired = traderInitialMarginRequiredMarketShift + traderInitialMarginRequiredDpmmShift;
+        s.traderInitialMarginRequired = SafeMath.max(traderInitialMarginRequiredMarketShift, traderInitialMarginRequiredDpmmShift);
 
         _saveData(state, data, false);
         position.set(P_CUMULAITVEFUNDINGPERPOWERVOLUME, data.cumulaitveFundingPerPowerVolume);
@@ -471,14 +471,14 @@ library Gamma {
         }
 
         {
-            int256 deltaPowerOpenVolume = (data.tdPowerVolume + v.tradeVolume).abs() - data.tdPowerVolume.abs();
-            data.powerOpenVolume += deltaPowerOpenVolume;
-            data.realFuturesOpenVolume += (data.tdRealFuturesVolume + temp.realFuturesVolume).abs() - data.tdRealFuturesVolume.abs();
-            if (deltaPowerOpenVolume > 0) {
-                if (data.powerOpenVolume.abs() >= data.powerOpenInterestLimit) {
+            int256 deltaPowerOpenInterest = (data.tdPowerVolume + v.tradeVolume).abs() - data.tdPowerVolume.abs();
+            data.powerOpenInterest += deltaPowerOpenInterest;
+            data.realFuturesOpenInterest += (data.tdRealFuturesVolume + temp.realFuturesVolume).abs() - data.tdRealFuturesVolume.abs();
+            if (deltaPowerOpenInterest > 0) {
+                if (data.powerOpenInterest.abs() >= data.powerOpenInterestLimit) {
                     revert PowerOpenInterestLimitExceeded();
                 }
-                if (data.realFuturesOpenVolume.abs() >= data.realFuturesOpenInterestLimit) {
+                if (data.realFuturesOpenInterest.abs() >= data.realFuturesOpenInterestLimit) {
                     revert RealFuturesOpenInterestLimitExceeded();
                 }
             }
@@ -516,7 +516,7 @@ library Gamma {
             data.realFuturesOpenInterestLimit,
             data.tdRealFuturesVolume
         );
-        s.traderInitialMarginRequired = traderInitialMarginRequiredMarketShift + traderInitialMarginRequiredDpmmShift;
+        s.traderInitialMarginRequired = SafeMath.max(traderInitialMarginRequiredMarketShift, traderInitialMarginRequiredDpmmShift);
 
         _saveData(state, data, true);
         position.set(P_POWERVOLUME, data.tdPowerVolume);
@@ -583,8 +583,8 @@ library Gamma {
         _getTradersPnl(data);
         _getInitialMarginRequired(data);
 
-        data.powerOpenVolume -= data.tdPowerVolume.abs();
-        data.realFuturesOpenVolume -= data.tdRealFuturesVolume.abs();
+        data.powerOpenInterest -= data.tdPowerVolume.abs();
+        data.realFuturesOpenInterest -= data.tdRealFuturesVolume.abs();
 
         data.tdPowerVolume = 0;
         data.tdRealFuturesVolume = 0;
@@ -666,8 +666,8 @@ library Gamma {
         _getTradersPnl(data);
         _getInitialMarginRequired(data);
 
-        data.powerOpenVolume -= data.tdPowerVolume.abs();
-        data.realFuturesOpenVolume -= data.tdRealFuturesVolume.abs();
+        data.powerOpenInterest -= data.tdPowerVolume.abs();
+        data.realFuturesOpenInterest -= data.tdRealFuturesVolume.abs();
 
         s.funding = data.funding;
         s.diffTradersPnl = data.tradersPnl - state.getInt(S_TRADERSPNL);
@@ -713,8 +713,8 @@ library Gamma {
         int256 netCost;
         int256 cumulaitveFundingPerPowerVolume;
         int256 cumulativeFundingPerRealFuturesVolume;
-        int256 powerOpenVolume;
-        int256 realFuturesOpenVolume;
+        int256 powerOpenInterest;
+        int256 realFuturesOpenInterest;
         // parameters
         int256 fundingPeriod;
         int256 powerAlpha;
@@ -759,8 +759,8 @@ library Gamma {
         data.netCost = state.getInt(S_NETCOST);
         data.cumulaitveFundingPerPowerVolume = state.getInt(S_CUMULAITVEFUNDINGPERPOWERVOLUME);
         data.cumulativeFundingPerRealFuturesVolume = state.getInt(S_CUMULATIVEFUNDINGPERREALFUTURESVOLUME);
-        data.powerOpenVolume = state.getInt(S_POWEROPENVOLUME);
-        data.realFuturesOpenVolume = state.getInt(S_REALFUTURESOPENVOLUME);
+        data.powerOpenInterest = state.getInt(S_POWEROPENINTEREST);
+        data.realFuturesOpenInterest = state.getInt(S_REALFUTURESOPENINTEREST);
 
         data.fundingPeriod = state.getInt(S_FUNDINGPERIOD);
         data.powerAlpha = state.getInt(S_POWERALPHA);
@@ -804,8 +804,8 @@ library Gamma {
             state.set(S_NETREALFUTURESVOLUME, data.netRealFuturesVolume);
             state.set(S_NETCOST, data.netCost);
 
-            state.set(S_POWEROPENVOLUME, data.powerOpenVolume);
-            state.set(S_REALFUTURESOPENVOLUME, data.realFuturesOpenVolume);
+            state.set(S_POWEROPENINTEREST, data.powerOpenInterest);
+            state.set(S_REALFUTURESOPENINTEREST, data.realFuturesOpenInterest);
         }
     }
 
@@ -918,6 +918,8 @@ library Gamma {
             int256 deltaPowerValue = deltaPowerPrice * powerVolume / ONE;
             int256 deltaRealFuturesPrice = futuresK * realFuturesOpenInterestLimit * 2 / ONE * indexPrice / ONE;
             int256 deltaRealFuturesValue = deltaRealFuturesPrice * realFuturesVolume / ONE;
+            // In gamma trade, powerVolume and realFuturesVolume will always be in opposite directions
+            // Such that in a stress trade, deltaPowerValue and deltaRealFuturesValue will always be both positive or both negative
             return deltaPowerValue.abs() + deltaRealFuturesValue.abs();
         }
     }
@@ -940,7 +942,7 @@ library Gamma {
             data.realFuturesOpenInterestLimit,
             data.netRealFuturesVolume
         );
-        data.initialMarginRequired = initialMarginRequiredMarketShift + initialMarginRequiredDpmmShift;
+        data.initialMarginRequired = SafeMath.max(initialMarginRequiredMarketShift, initialMarginRequiredDpmmShift);
     }
 
     // This PnL is used to calculate the trader's margin requirement, not the actual PnL of this position.
