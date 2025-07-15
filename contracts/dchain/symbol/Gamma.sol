@@ -383,8 +383,9 @@ library Gamma {
         unchecked { temp.diff = data.cumulativeFundingPerRealFuturesVolume - data.tdCumulativeFundingPerRealFuturesVolume; }
         s.traderFunding += data.tdRealFuturesVolume * temp.diff / ONE;
 
+        // Currently disable user-specified entry price
+        v.entryPrice = data.curIndexPrice;
         // trade
-        if (v.entryPrice <= 0) v.entryPrice = data.curIndexPrice;
         // power cost calculated through power's DPMM, with power's slippage cost included
         temp.powerCost = DpmmPower.calculateCost(
             data.powerTheoreticalPrice, data.powerK, data.netPowerVolume, v.tradeVolume
