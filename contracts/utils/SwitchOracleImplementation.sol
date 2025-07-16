@@ -12,13 +12,17 @@ contract SwitchOracleImplementation is SwitchOracleStorage {
         gateway = gateway_;
     }
 
-    function enableGatewayTransferOut() external _onlyAdmin_ {
-        gatewayTransferOutDisabled = false;
+    function setOperator(address operator_) external _onlyAdmin_ {
+        operator = operator_;
     }
 
-    function disableGatewayTransferOut() external {
-        require(msg.sender == gateway, 'Only Gateway');
-        gatewayTransferOutDisabled = true;
+    function unfreezeGatewayTransferOut() external _onlyAdmin_ {
+        gatewayTransferOutFreezed = false;
+    }
+
+    function freezeGatewayTransferOut() external {
+        require(msg.sender == gateway || msg.sender == operator, 'Only Gateway or operator');
+        gatewayTransferOutFreezed = true;
     }
 
 }

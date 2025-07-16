@@ -7,6 +7,8 @@ import './Implementation.sol';
 
 abstract contract SwitchOracleStorage is Admin, Implementation {
 
-    bool public gatewayTransferOutDisabled;
+    address public operator;
+
+    bool public gatewayTransferOutFreezed;
 
 }
