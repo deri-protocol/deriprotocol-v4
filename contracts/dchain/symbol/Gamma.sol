@@ -54,19 +54,18 @@ library Gamma {
     );
 
     // parameters
-    uint8 constant S_PRICEID                           = 1;
-    uint8 constant S_VOLATILITYID                      = 2;
-    uint8 constant S_FUNDINGPERIOD                     = 3;
-    uint8 constant S_MINTRADEVOLUME                    = 4;
-    uint8 constant S_POWERALPHA                        = 5;
-    uint8 constant S_FUTURESALPHA                      = 6;
-    uint8 constant S_POWERFEERATIO                     = 7;
-    uint8 constant S_FUTURESFEERATIO                   = 8;
-    uint8 constant S_INITIALMARGINRATIO                = 9;
-    uint8 constant S_MAINTENANCEMARGINRATIO            = 10;
-    uint8 constant S_ISCLOSEONLY                       = 11;
-    uint8 constant S_POWEROPENINTERESTLIMIT            = 12;
-    uint8 constant S_EFFECTIVEFUTURESOPENINTERESTLIMIT = 13;
+    uint8 constant S_PRICEID                = 1;
+    uint8 constant S_VOLATILITYID           = 2;
+    uint8 constant S_FUNDINGPERIOD          = 3;
+    uint8 constant S_MINTRADEVOLUME         = 4;
+    uint8 constant S_POWERALPHA             = 5;
+    uint8 constant S_FUTURESALPHA           = 6;
+    uint8 constant S_POWERFEERATIO          = 7;
+    uint8 constant S_FUTURESFEERATIO        = 8;
+    uint8 constant S_INITIALMARGINRATIO     = 9;
+    uint8 constant S_MAINTENANCEMARGINRATIO = 10;
+    uint8 constant S_ISCLOSEONLY            = 11;
+    uint8 constant S_POWEROPENINTERESTLIMIT = 12;
 
     // states
     uint8 constant S_LASTTIMESTAMP                         = 101;
@@ -151,7 +150,7 @@ library Gamma {
         mapping(uint8 => bytes32) storage state,
         bytes32[] memory p
     ) external {
-        if (p.length != 13) {
+        if (p.length != 12) {
             revert WrongParameterLength();
         }
         state.set(S_PRICEID, p[0]);
@@ -166,7 +165,6 @@ library Gamma {
         state.set(S_MAINTENANCEMARGINRATIO, p[9]);
         state.set(S_ISCLOSEONLY, p[10]);
         state.set(S_POWEROPENINTERESTLIMIT, p[11]);
-        state.set(S_EFFECTIVEFUTURESOPENINTERESTLIMIT, p[12]);
         emit UpdateGammaParameter(symbolId);
     }
 
@@ -200,7 +198,6 @@ library Gamma {
         state.set(S_MAINTENANCEMARGINRATIO, bytes32(0));
         state.set(S_ISCLOSEONLY, true);
         state.set(S_POWEROPENINTERESTLIMIT, bytes32(0));
-        state.set(S_EFFECTIVEFUTURESOPENINTERESTLIMIT, bytes32(0));
         emit RemoveGamma(symbolId);
     }
 
@@ -311,15 +308,10 @@ library Gamma {
             data.initialMarginRatio
         );
         int256 traderInitialMarginRequiredDpmmShift = _calculateInitialMarginRequiredDpmmShift(
-            data.oneHT,
             data.powerTheoreticalPrice,
-            data.curIndexPrice,
             data.powerOpenInterestLimit,
-            data.effectiveFuturesOpenInterestLimit,
             data.powerK,
-            data.futuresK,
-            data.tdPowerVolume,
-            data.tdRealFuturesVolume
+            data.tdPowerVolume
         );
         s.traderInitialMarginRequired = SafeMath.max(traderInitialMarginRequiredMarketShift, traderInitialMarginRequiredDpmmShift);
 
@@ -500,15 +492,10 @@ library Gamma {
             data.initialMarginRatio
         );
         int256 traderInitialMarginRequiredDpmmShift = _calculateInitialMarginRequiredDpmmShift(
-            data.oneHT,
             data.powerTheoreticalPrice,
-            data.curIndexPrice,
             data.powerOpenInterestLimit,
-            data.effectiveFuturesOpenInterestLimit,
             data.powerK,
-            data.futuresK,
-            data.tdPowerVolume,
-            data.tdRealFuturesVolume
+            data.tdPowerVolume
         );
         s.traderInitialMarginRequired = SafeMath.max(traderInitialMarginRequiredMarketShift, traderInitialMarginRequiredDpmmShift);
 
@@ -712,7 +699,6 @@ library Gamma {
         int256 futuresAlpha;
         int256 initialMarginRatio;
         int256 powerOpenInterestLimit;
-        int256 effectiveFuturesOpenInterestLimit;
         // postion
         int256 tdPowerVolume;
         int256 tdRealFuturesVolume;
@@ -757,7 +743,6 @@ library Gamma {
         data.futuresAlpha = state.getInt(S_FUTURESALPHA);
         data.initialMarginRatio = state.getInt(S_INITIALMARGINRATIO);
         data.powerOpenInterestLimit = state.getInt(S_POWEROPENINTERESTLIMIT);
-        data.effectiveFuturesOpenInterestLimit = state.getInt(S_EFFECTIVEFUTURESOPENINTERESTLIMIT);
     }
 
     function _getDataWithPosition(
@@ -890,28 +875,18 @@ library Gamma {
     }
 
     function _calculateInitialMarginRequiredDpmmShift(
-        int256 oneHT,
         int256 powerTheoreticalPrice,
-        int256 indexPrice,
         int256 powerOpenInterestLimit,
-        int256 effectiveFuturesOpenInterestLimit,
         int256 powerK,
-        int256 futuresK,
-        int256 powerVolume,
-        int256 realFuturesVolume
+        int256 powerVolume
     ) internal pure returns (int256)
     {
         if (powerVolume == 0) {
             return 0;
         } else {
-            int256 deltaPowerPrice = powerK * powerOpenInterestLimit / ONE * powerTheoreticalPrice / ONE;
+            int256 deltaPowerPrice = powerK * powerOpenInterestLimit * 2 / ONE * powerTheoreticalPrice / ONE;
             int256 deltaPowerValue = deltaPowerPrice * powerVolume / ONE;
-
-            int256 effectiveFuturesVolume = 2 * powerVolume * indexPrice / oneHT + realFuturesVolume;
-            int256 deltaEffectiveFuturesPrice = futuresK * effectiveFuturesOpenInterestLimit / ONE * indexPrice / ONE;
-            int256 deltaEffectiveFuturesSlippageCost = deltaEffectiveFuturesPrice * effectiveFuturesVolume / ONE;
-
-            return deltaPowerValue.abs() + deltaEffectiveFuturesSlippageCost.abs();
+            return deltaPowerValue.abs();
         }
     }
 
@@ -924,15 +899,10 @@ library Gamma {
             data.initialMarginRatio
         );
         int256 initialMarginRequiredDpmmShift = _calculateInitialMarginRequiredDpmmShift(
-            data.oneHT,
             data.powerTheoreticalPrice,
-            data.curIndexPrice,
             data.powerOpenInterestLimit,
-            data.effectiveFuturesOpenInterestLimit,
             data.powerK,
-            data.futuresK,
-            data.netPowerVolume,
-            data.netRealFuturesVolume
+            data.netPowerVolume
         );
         data.initialMarginRequired = SafeMath.max(initialMarginRequiredMarketShift, initialMarginRequiredDpmmShift);
     }
