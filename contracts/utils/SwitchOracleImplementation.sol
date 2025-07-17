@@ -6,20 +6,23 @@ import './SwitchOracleStorage.sol';
 
 contract SwitchOracleImplementation is SwitchOracleStorage {
 
-    address public operator;
-    bool public state;
+    address public immutable gateway;
+
+    constructor (address gateway_) {
+        gateway = gateway_;
+    }
 
     function setOperator(address operator_) external _onlyAdmin_ {
         operator = operator_;
     }
 
-    function resetState() external _onlyAdmin_ {
-        state = false;
+    function unfreezeGatewayTransferOut() external _onlyAdmin_ {
+        gatewayTransferOutFreezed = false;
     }
 
-    function setState() external {
-        require(msg.sender == operator, 'not operator');
-        state = true;
+    function freezeGatewayTransferOut() external {
+        require(msg.sender == gateway || msg.sender == operator, 'Only Gateway or operator');
+        gatewayTransferOutFreezed = true;
     }
 
 }

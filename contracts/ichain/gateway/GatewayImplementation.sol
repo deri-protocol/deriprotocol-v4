@@ -203,6 +203,12 @@ contract GatewayImplementation is GatewayStorage {
         return GatewayHelper.getExecutionFees(_executionFees);
     }
 
+    // Functions
+    // addBToken, delBToken, setBTokenParameter, setExecutionFee, setDChainExecutionFeePerRequest, finishCollectProtocolFee
+    // are protocol maintenance functions that are rarely called.
+    // Due to contract bytecode limit, these functions are commented out, which doesn't affect protocol interactions.
+    // During maintenance, a temp implementation with these functions enabled will used.
+
     //================================================================================
     // Setters
     //================================================================================
@@ -270,19 +276,19 @@ contract GatewayImplementation is GatewayStorage {
     // Interactions
     //================================================================================
 
-    function finishCollectProtocolFee(bytes memory eventData, bytes memory signature) external _onlyAdmin_ {
-        GatewayHelper.verifyEventData(eventData, signature, 64, dChainEventSigner);
-        IGateway.VarOnExecuteCollectProtocolFee memory v = abi.decode(eventData, (IGateway.VarOnExecuteCollectProtocolFee));
-        require(v.chainId == block.chainid);
+    // function finishCollectProtocolFee(bytes memory eventData, bytes memory signature) external _onlyAdmin_ {
+    //     GatewayHelper.verifyEventData(eventData, signature, 64, dChainEventSigner);
+    //     IGateway.VarOnExecuteCollectProtocolFee memory v = abi.decode(eventData, (IGateway.VarOnExecuteCollectProtocolFee));
+    //     require(v.chainId == block.chainid);
 
-        GatewayHelper.finishCollectProtocolFee(
-            _gatewayStates,
-            vault0,
-            tokenB0,
-            protocolFeeManager,
-            v.cumulativeCollectedProtocolFeeOnEngine
-        );
-    }
+    //     GatewayHelper.finishCollectProtocolFee(
+    //         _gatewayStates,
+    //         vault0,
+    //         tokenB0,
+    //         protocolFeeManager,
+    //         v.cumulativeCollectedProtocolFeeOnEngine
+    //     );
+    // }
 
     /**
      * @notice Request to add liquidity with specified base token.
@@ -714,6 +720,11 @@ contract GatewayImplementation is GatewayStorage {
         (reward, b0AmountIn) = GatewayHelper.processReward(tokenB0, vault0, reward, b0AmountIn, v.executor, v.finisher);
         lpPnl -= reward;
 
+        if (lpPnl < 0) {
+            // underwater liquidation, freeze transfer out
+            ISwitchOracle(switchOracle).freezeGatewayTransferOut();
+        }
+
         if (b0AmountIn > 0) {
             vault0.deposit(uint256(0), b0AmountIn);
         }
@@ -948,7 +959,7 @@ contract GatewayImplementation is GatewayStorage {
      * @return bAmount The amount of tokens actually transferred.
      */
     function _transferOut(Data memory data, uint256 bAmountOut, bool isTd) internal returns (uint256 bAmount) {
-        require(!ISwitchOracle(switchOracle).state());
+        require(!ISwitchOracle(switchOracle).gatewayTransferOutFreezed());
 
         uint256 minSwapB0Amount = 10 ** (decimalsB0 - 2); // min swap b0Amount of 0.01 USDC
         bAmount = bAmountOut;
