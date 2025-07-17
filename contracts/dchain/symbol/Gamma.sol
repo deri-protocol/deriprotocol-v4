@@ -20,6 +20,7 @@ library Gamma {
     error SlippageExceedsLimit();
     error MarkExceedsLimit();
     error NoVolumeToForceClose();
+    error PowerOpenInterestLimitExceeded();
 
     event UpdateGammaParameter(bytes32 symbolId);
     event RemoveGamma(bytes32 symbolId);
@@ -53,17 +54,18 @@ library Gamma {
     );
 
     // parameters
-    uint8 constant S_PRICEID                 = 1;
-    uint8 constant S_VOLATILITYID            = 2;
-    uint8 constant S_FUNDINGPERIOD           = 3;
-    uint8 constant S_MINTRADEVOLUME          = 4;
-    uint8 constant S_POWERALPHA              = 5;
-    uint8 constant S_FUTURESALPHA            = 6;
-    uint8 constant S_POWERFEERATIO           = 7;
-    uint8 constant S_FUTURESFEERATIO         = 8;
-    uint8 constant S_INITIALMARGINRATIO      = 9;
-    uint8 constant S_MAINTENANCEMARGINRATIO  = 10;
-    uint8 constant S_ISCLOSEONLY             = 11;
+    uint8 constant S_PRICEID                = 1;
+    uint8 constant S_VOLATILITYID           = 2;
+    uint8 constant S_FUNDINGPERIOD          = 3;
+    uint8 constant S_MINTRADEVOLUME         = 4;
+    uint8 constant S_POWERALPHA             = 5;
+    uint8 constant S_FUTURESALPHA           = 6;
+    uint8 constant S_POWERFEERATIO          = 7;
+    uint8 constant S_FUTURESFEERATIO        = 8;
+    uint8 constant S_INITIALMARGINRATIO     = 9;
+    uint8 constant S_MAINTENANCEMARGINRATIO = 10;
+    uint8 constant S_ISCLOSEONLY            = 11;
+    uint8 constant S_POWEROPENINTERESTLIMIT = 12;
 
     // states
     uint8 constant S_LASTTIMESTAMP                         = 101;
@@ -76,6 +78,7 @@ library Gamma {
     uint8 constant S_INITIALMARGINREQUIRED                 = 108;
     uint8 constant S_CUMULAITVEFUNDINGPERPOWERVOLUME       = 109;
     uint8 constant S_CUMULATIVEFUNDINGPERREALFUTURESVOLUME = 110;
+    uint8 constant S_POWEROPENINTEREST                     = 111;
 
     uint8 constant P_POWERVOLUME                           = 1;
     uint8 constant P_REALFUTURESVOLUME                     = 2;
@@ -99,7 +102,7 @@ library Gamma {
     function getState(mapping(uint8 => bytes32) storage state)
     external view returns (bytes32[] memory s)
     {
-        s = new bytes32[](21);
+        s = new bytes32[](22);
 
         s[0]  = state.getBytes32(S_PRICEID);
         s[1]  = state.getBytes32(S_VOLATILITYID);
@@ -123,6 +126,8 @@ library Gamma {
         s[18] = state.getBytes32(S_INITIALMARGINREQUIRED);
         s[19] = state.getBytes32(S_CUMULAITVEFUNDINGPERPOWERVOLUME);
         s[20] = state.getBytes32(S_CUMULATIVEFUNDINGPERREALFUTURESVOLUME);
+
+        s[21] = state.getBytes32(S_POWEROPENINTEREST);
     }
 
     function getPosition(mapping(uint8 => bytes32) storage position)
@@ -136,7 +141,6 @@ library Gamma {
         pos[4] = position.getBytes32(P_CUMULATIVEFUNDINGPERREALFUTURESVOLUME);
     }
 
-
     //================================================================================
     // Setters
     //================================================================================
@@ -146,7 +150,7 @@ library Gamma {
         mapping(uint8 => bytes32) storage state,
         bytes32[] memory p
     ) external {
-        if (p.length != 11) {
+        if (p.length != 12) {
             revert WrongParameterLength();
         }
         state.set(S_PRICEID, p[0]);
@@ -160,6 +164,7 @@ library Gamma {
         state.set(S_INITIALMARGINRATIO, p[8]);
         state.set(S_MAINTENANCEMARGINRATIO, p[9]);
         state.set(S_ISCLOSEONLY, p[10]);
+        state.set(S_POWEROPENINTERESTLIMIT, p[11]);
         emit UpdateGammaParameter(symbolId);
     }
 
@@ -192,7 +197,21 @@ library Gamma {
         state.set(S_INITIALMARGINRATIO, bytes32(0));
         state.set(S_MAINTENANCEMARGINRATIO, bytes32(0));
         state.set(S_ISCLOSEONLY, true);
+        state.set(S_POWEROPENINTERESTLIMIT, bytes32(0));
         emit RemoveGamma(symbolId);
+    }
+
+    function initializeOpenInterest(
+        mapping(uint8 => bytes32) storage state,
+        mapping(uint256 => mapping(uint8 => bytes32)) storage positions,
+        uint256[] memory pTokenIds
+    ) external {
+        int256 powerOpenInterest;
+        for (uint256 i = 0; i < pTokenIds.length; i++) {
+            uint256 pTokenId = pTokenIds[i];
+            powerOpenInterest += positions[pTokenId].getInt(P_POWERVOLUME).abs();
+        }
+        state.set(S_POWEROPENINTEREST, powerOpenInterest);
     }
 
     //================================================================================
@@ -281,13 +300,20 @@ library Gamma {
         }
 
         s.traderPnl = _calculateTraderPnl(data);
-        s.traderInitialMarginRequired = _calculateInitialMarginRequired(
+        int256 traderInitialMarginRequiredMarketShift = _calculateInitialMarginRequiredMarketShift(
             data.curIndexPrice,
             data.oneHT,
             data.tdPowerVolume,
             data.tdRealFuturesVolume,
             data.initialMarginRatio
         );
+        int256 traderInitialMarginRequiredDpmmShift = _calculateInitialMarginRequiredDpmmShift(
+            data.powerTheoreticalPrice,
+            data.powerOpenInterestLimit,
+            data.powerK,
+            data.tdPowerVolume
+        );
+        s.traderInitialMarginRequired = SafeMath.max(traderInitialMarginRequiredMarketShift, traderInitialMarginRequiredDpmmShift);
 
         _saveData(state, data, false);
         position.set(P_CUMULAITVEFUNDINGPERPOWERVOLUME, data.cumulaitveFundingPerPowerVolume);
@@ -349,8 +375,9 @@ library Gamma {
         unchecked { temp.diff = data.cumulativeFundingPerRealFuturesVolume - data.tdCumulativeFundingPerRealFuturesVolume; }
         s.traderFunding += data.tdRealFuturesVolume * temp.diff / ONE;
 
+        // Currently disable user-specified entry price
+        v.entryPrice = data.curIndexPrice;
         // trade
-        if (v.entryPrice <= 0) v.entryPrice = data.curIndexPrice;
         // power cost calculated through power's DPMM, with power's slippage cost included
         temp.powerCost = DpmmPower.calculateCost(
             data.powerTheoreticalPrice, data.powerK, data.netPowerVolume, v.tradeVolume
@@ -431,6 +458,17 @@ library Gamma {
             }
         }
 
+        // Check power open interest limit
+        {
+            int256 deltaPowerOpenInterest = (data.tdPowerVolume + v.tradeVolume).abs() - data.tdPowerVolume.abs();
+            data.powerOpenInterest += deltaPowerOpenInterest;
+            if (deltaPowerOpenInterest > 0) {
+                if (data.powerOpenInterest >= data.powerOpenInterestLimit) {
+                    revert PowerOpenInterestLimitExceeded();
+                }
+            }
+        }
+
         data.tdPowerVolume += v.tradeVolume;
         data.tdRealFuturesVolume += temp.realFuturesVolume;
         // If A's position cost is 1000, and A's close half of his position,
@@ -446,13 +484,20 @@ library Gamma {
         s.diffInitialMarginRequired = data.initialMarginRequired - state.getInt(S_INITIALMARGINREQUIRED);
 
         s.traderPnl = _calculateTraderPnl(data);
-        s.traderInitialMarginRequired = _calculateInitialMarginRequired(
+        int256 traderInitialMarginRequiredMarketShift = _calculateInitialMarginRequiredMarketShift(
             data.curIndexPrice,
             data.oneHT,
             data.tdPowerVolume,
             data.tdRealFuturesVolume,
             data.initialMarginRatio
         );
+        int256 traderInitialMarginRequiredDpmmShift = _calculateInitialMarginRequiredDpmmShift(
+            data.powerTheoreticalPrice,
+            data.powerOpenInterestLimit,
+            data.powerK,
+            data.tdPowerVolume
+        );
+        s.traderInitialMarginRequired = SafeMath.max(traderInitialMarginRequiredMarketShift, traderInitialMarginRequiredDpmmShift);
 
         _saveData(state, data, true);
         position.set(P_POWERVOLUME, data.tdPowerVolume);
@@ -519,6 +564,8 @@ library Gamma {
         _getTradersPnl(data);
         _getInitialMarginRequired(data);
 
+        data.powerOpenInterest -= data.tdPowerVolume.abs();
+
         data.tdPowerVolume = 0;
         data.tdRealFuturesVolume = 0;
         data.tdCost = 0;
@@ -583,14 +630,14 @@ library Gamma {
         s.tradeRealizedCost = s.tradeCost + data.tdCost;
 
         s.traderPnl = _calculateTraderPnl(data);
-        int256 traderInitialMarginRequired = _calculateInitialMarginRequired(
+        int256 traderInitialMarginRequiredMarketShift = _calculateInitialMarginRequiredMarketShift(
             data.curIndexPrice,
             data.oneHT,
             data.tdPowerVolume,
             data.tdRealFuturesVolume,
             data.initialMarginRatio
         );
-        s.traderMaintenanceMarginRequired = traderInitialMarginRequired * state.getInt(S_MAINTENANCEMARGINRATIO) / data.initialMarginRatio;
+        s.traderMaintenanceMarginRequired = traderInitialMarginRequiredMarketShift * state.getInt(S_MAINTENANCEMARGINRATIO) / data.initialMarginRatio;
 
         data.netPowerVolume += -data.tdPowerVolume;
         data.netRealFuturesVolume += temp.realFuturesVolume;
@@ -598,6 +645,8 @@ library Gamma {
         data.netCost += s.tradeCost - s.tradeRealizedCost;
         _getTradersPnl(data);
         _getInitialMarginRequired(data);
+
+        data.powerOpenInterest -= data.tdPowerVolume.abs();
 
         s.funding = data.funding;
         s.diffTradersPnl = data.tradersPnl - state.getInt(S_TRADERSPNL);
@@ -643,11 +692,13 @@ library Gamma {
         int256 netCost;
         int256 cumulaitveFundingPerPowerVolume;
         int256 cumulativeFundingPerRealFuturesVolume;
+        int256 powerOpenInterest;
         // parameters
         int256 fundingPeriod;
         int256 powerAlpha;
         int256 futuresAlpha;
         int256 initialMarginRatio;
+        int256 powerOpenInterestLimit;
         // postion
         int256 tdPowerVolume;
         int256 tdRealFuturesVolume;
@@ -685,11 +736,13 @@ library Gamma {
         data.netCost = state.getInt(S_NETCOST);
         data.cumulaitveFundingPerPowerVolume = state.getInt(S_CUMULAITVEFUNDINGPERPOWERVOLUME);
         data.cumulativeFundingPerRealFuturesVolume = state.getInt(S_CUMULATIVEFUNDINGPERREALFUTURESVOLUME);
+        data.powerOpenInterest = state.getInt(S_POWEROPENINTEREST);
 
         data.fundingPeriod = state.getInt(S_FUNDINGPERIOD);
         data.powerAlpha = state.getInt(S_POWERALPHA);
         data.futuresAlpha = state.getInt(S_FUTURESALPHA);
         data.initialMarginRatio = state.getInt(S_INITIALMARGINRATIO);
+        data.powerOpenInterestLimit = state.getInt(S_POWEROPENINTERESTLIMIT);
     }
 
     function _getDataWithPosition(
@@ -725,6 +778,8 @@ library Gamma {
             state.set(S_NETPOWERVOLUME, data.netPowerVolume);
             state.set(S_NETREALFUTURESVOLUME, data.netRealFuturesVolume);
             state.set(S_NETCOST, data.netCost);
+
+            state.set(S_POWEROPENINTEREST, data.powerOpenInterest);
         }
     }
 
@@ -802,7 +857,7 @@ library Gamma {
 
     // Initial margin per volume = 2 * |curIndexPrice - averageEntryPrice| * curIndexPrice * initialMarginRatio
     //                           + (curIndexPrice * initialMarginRatio)^2
-    function _calculateInitialMarginRequired(
+    function _calculateInitialMarginRequiredMarketShift(
         int256 indexPrice,
         int256 oneHT,
         int256 powerVolume,
@@ -815,18 +870,41 @@ library Gamma {
         } else {
             int256 averageEntryPrice = -realFuturesVolume * oneHT / powerVolume / 2;
             int256 dx = indexPrice * initialMarginRatio / ONE;
-            return ((indexPrice - averageEntryPrice).abs() * 2 + dx) * dx / ONE * powerVolume.abs() / ONE;
+            return ((indexPrice - averageEntryPrice).abs() * 2 + dx) * dx / oneHT * powerVolume.abs() / ONE;
+        }
+    }
+
+    function _calculateInitialMarginRequiredDpmmShift(
+        int256 powerTheoreticalPrice,
+        int256 powerOpenInterestLimit,
+        int256 powerK,
+        int256 powerVolume
+    ) internal pure returns (int256)
+    {
+        if (powerVolume == 0) {
+            return 0;
+        } else {
+            int256 deltaPowerPrice = powerK * powerOpenInterestLimit * 2 / ONE * powerTheoreticalPrice / ONE;
+            int256 deltaPowerValue = deltaPowerPrice * powerVolume / ONE;
+            return deltaPowerValue.abs();
         }
     }
 
     function _getInitialMarginRequired(Data memory data) internal pure {
-        data.initialMarginRequired = _calculateInitialMarginRequired(
+        int256 initialMarginRequiredMarketShift = _calculateInitialMarginRequiredMarketShift(
             data.curIndexPrice,
             data.oneHT,
             data.netPowerVolume,
             data.netRealFuturesVolume,
             data.initialMarginRatio
         );
+        int256 initialMarginRequiredDpmmShift = _calculateInitialMarginRequiredDpmmShift(
+            data.powerTheoreticalPrice,
+            data.powerOpenInterestLimit,
+            data.powerK,
+            data.netPowerVolume
+        );
+        data.initialMarginRequired = SafeMath.max(initialMarginRequiredMarketShift, initialMarginRequiredDpmmShift);
     }
 
     // This PnL is used to calculate the trader's margin requirement, not the actual PnL of this position.
