@@ -203,6 +203,12 @@ contract GatewayImplementation is GatewayStorage {
         return GatewayHelper.getExecutionFees(_executionFees);
     }
 
+    // Functions
+    // addBToken, delBToken, setBTokenParameter, setExecutionFee, setDChainExecutionFeePerRequest, finishCollectProtocolFee
+    // are protocol maintenance functions that are rarely called.
+    // Due to contract bytecode limit, these functions are commented out, which doesn't affect protocol interactions.
+    // During maintenance, a temp implementation with these functions enabled will used.
+
     //================================================================================
     // Setters
     //================================================================================
