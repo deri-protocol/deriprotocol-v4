@@ -270,19 +270,19 @@ contract GatewayImplementation is GatewayStorage {
     // Interactions
     //================================================================================
 
-    function finishCollectProtocolFee(bytes memory eventData, bytes memory signature) external _onlyAdmin_ {
-        GatewayHelper.verifyEventData(eventData, signature, 64, dChainEventSigner);
-        IGateway.VarOnExecuteCollectProtocolFee memory v = abi.decode(eventData, (IGateway.VarOnExecuteCollectProtocolFee));
-        require(v.chainId == block.chainid);
+    // function finishCollectProtocolFee(bytes memory eventData, bytes memory signature) external _onlyAdmin_ {
+    //     GatewayHelper.verifyEventData(eventData, signature, 64, dChainEventSigner);
+    //     IGateway.VarOnExecuteCollectProtocolFee memory v = abi.decode(eventData, (IGateway.VarOnExecuteCollectProtocolFee));
+    //     require(v.chainId == block.chainid);
 
-        GatewayHelper.finishCollectProtocolFee(
-            _gatewayStates,
-            vault0,
-            tokenB0,
-            protocolFeeManager,
-            v.cumulativeCollectedProtocolFeeOnEngine
-        );
-    }
+    //     GatewayHelper.finishCollectProtocolFee(
+    //         _gatewayStates,
+    //         vault0,
+    //         tokenB0,
+    //         protocolFeeManager,
+    //         v.cumulativeCollectedProtocolFeeOnEngine
+    //     );
+    // }
 
     /**
      * @notice Request to add liquidity with specified base token.
