@@ -102,7 +102,7 @@ library Gamma {
     function getState(mapping(uint8 => bytes32) storage state)
     external view returns (bytes32[] memory s)
     {
-        s = new bytes32[](22);
+        s = new bytes32[](23);
 
         s[0]  = state.getBytes32(S_PRICEID);
         s[1]  = state.getBytes32(S_VOLATILITYID);
@@ -127,7 +127,8 @@ library Gamma {
         s[19] = state.getBytes32(S_CUMULAITVEFUNDINGPERPOWERVOLUME);
         s[20] = state.getBytes32(S_CUMULATIVEFUNDINGPERREALFUTURESVOLUME);
 
-        s[21] = state.getBytes32(S_POWEROPENINTEREST);
+        s[21] = state.getBytes32(S_POWEROPENINTERESTLIMIT);
+        s[22] = state.getBytes32(S_POWEROPENINTEREST);
     }
 
     function getPosition(mapping(uint8 => bytes32) storage position)
