@@ -9,6 +9,7 @@ abstract contract SwitchOracleStorage is Admin, Implementation {
 
     address public operator;
 
-    bool public gatewayTransferOutFreezed;
+    // gateway => freezed
+    mapping (address => bool) public transferOutFreezed;
 
 }
