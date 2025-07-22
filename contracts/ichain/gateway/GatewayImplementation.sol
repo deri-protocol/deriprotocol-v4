@@ -722,7 +722,7 @@ contract GatewayImplementation is GatewayStorage {
 
         if (lpPnl < 0) {
             // underwater liquidation, freeze transfer out
-            ISwitchOracle(switchOracle).freezeGatewayTransferOut();
+            ISwitchOracle(switchOracle).freezeTransferOut();
         }
 
         if (b0AmountIn > 0) {
@@ -959,7 +959,7 @@ contract GatewayImplementation is GatewayStorage {
      * @return bAmount The amount of tokens actually transferred.
      */
     function _transferOut(Data memory data, uint256 bAmountOut, bool isTd) internal returns (uint256 bAmount) {
-        require(!ISwitchOracle(switchOracle).gatewayTransferOutFreezed());
+        require(!ISwitchOracle(switchOracle).transferOutFreezed(address(this)));
 
         uint256 minSwapB0Amount = 10 ** (decimalsB0 - 2); // min swap b0Amount of 0.01 USDC
         bAmount = bAmountOut;

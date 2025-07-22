@@ -6,10 +6,14 @@ interface ISwitchOracle {
 
     function operator() external view returns (address);
 
-    function gatewayTransferOutFreezed() external view returns (bool);
+    function transferOutFreezed(address gateway) external view returns (bool);
 
     function setOperator(address operator_) external;
 
-    function freezeGatewayTransferOut() external;
+    function freezeTransferOut() external;
+
+    function freezeTransferOut(address gateway) external;
+
+    function unfreezeTransferOut(address gateway) external;
 
 }
