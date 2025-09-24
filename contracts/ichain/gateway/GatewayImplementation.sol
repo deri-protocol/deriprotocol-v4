@@ -213,24 +213,24 @@ contract GatewayImplementation is GatewayStorage {
     // Setters
     //================================================================================
 
-    // function addBToken(
-    //     address bToken,
-    //     address vault,
-    //     bytes32 oracleId,
-    //     uint256 collateralFactor
-    // ) external _onlyAdmin_ {
-    //     GatewayHelper.addBToken(
-    //         _bTokenStates,
-    //         swapper,
-    //         oracle,
-    //         vault0,
-    //         tokenB0,
-    //         bToken,
-    //         vault,
-    //         oracleId,
-    //         collateralFactor
-    //     );
-    // }
+    function addBToken(
+        address bToken,
+        address vault,
+        bytes32 oracleId,
+        uint256 collateralFactor
+    ) external _onlyAdmin_ {
+        GatewayHelper.addBToken(
+            _bTokenStates,
+            swapper,
+            oracle,
+            vault0,
+            tokenB0,
+            bToken,
+            vault,
+            oracleId,
+            collateralFactor
+        );
+    }
 
     // function delBToken(address bToken) external _onlyAdmin_ {
     //     GatewayHelper.delBToken(_bTokenStates, bToken);
@@ -255,22 +255,22 @@ contract GatewayImplementation is GatewayStorage {
     //     GatewayHelper.claimDChainExecutionFee(_gatewayStates, to);
     // }
 
-    // @notice Claim unused iChain execution fee for dTokenId
-    function claimUnusedIChainExecutionFee(uint256 dTokenId, bool isLp) external {
-        GatewayHelper.claimUnusedIChainExecutionFee(
-            _gatewayStates,
-            _dTokenStates,
-            lToken,
-            pToken,
-            dTokenId,
-            isLp
-        );
-    }
+    // // @notice Claim unused iChain execution fee for dTokenId
+    // function claimUnusedIChainExecutionFee(uint256 dTokenId, bool isLp) external {
+    //     GatewayHelper.claimUnusedIChainExecutionFee(
+    //         _gatewayStates,
+    //         _dTokenStates,
+    //         lToken,
+    //         pToken,
+    //         dTokenId,
+    //         isLp
+    //     );
+    // }
 
-    // @notice Redeem B0 for burning IOU
-    function redeemIOU(uint256 b0Amount) external {
-        GatewayHelper.redeemIOU(tokenB0, vault0, iou, msg.sender, b0Amount);
-    }
+    // // @notice Redeem B0 for burning IOU
+    // function redeemIOU(uint256 b0Amount) external {
+    //     GatewayHelper.redeemIOU(tokenB0, vault0, iou, msg.sender, b0Amount);
+    // }
 
     function approveSwapper(address bToken) external _onlyAdmin_ {
         bToken.approveMax(address(swapper));
