@@ -34,9 +34,9 @@ contract BaseSwapperEtherex is Admin {
         return paths[token1][token2];
     }
 
-    // Path is constructed as: [tokens[0], fees[0], tokens[1], fees[1], ... tokens[N-1]]
-    function setPath(address[] memory tokens, int24[] memory fees) external _onlyAdmin_ {
-        uint256 length = fees.length;
+    // Path is constructed as: [tokens[0], tickSpacings[0], tokens[1], tickSpacings[1], ... tokens[N-1]]
+    function setPath(address[] memory tokens, int24[] memory tickSpacings) external _onlyAdmin_ {
+        uint256 length = tickSpacings.length;
         require(length >= 1 && tokens.length == length + 1, 'Invalid path');
 
         bytes memory path;
@@ -45,17 +45,17 @@ contract BaseSwapperEtherex is Admin {
         path = abi.encodePacked(tokens[0]);
         for (uint256 i = 0; i < length; i++) {
             require(
-                factory.getPool(tokens[i], tokens[i+1], fees[i]) != address(0),
+                factory.getPool(tokens[i], tokens[i+1], tickSpacings[i]) != address(0),
                 'Invalid path'
             );
-            path = abi.encodePacked(path, fees[i], tokens[i+1]);
+            path = abi.encodePacked(path, tickSpacings[i], tokens[i+1]);
         }
         paths[tokens[0]][tokens[length]] = path;
 
         // Backward path
         path = abi.encodePacked(tokens[length]);
         for (uint256 i = length; i > 0; i--) {
-            path = abi.encodePacked(path, fees[i-1], tokens[i-1]);
+            path = abi.encodePacked(path, tickSpacings[i-1], tokens[i-1]);
         }
         paths[tokens[length]][tokens[0]] = path;
 
@@ -139,7 +139,7 @@ interface IEtherexFactory {
     function getPool(
         address tokenA,
         address tokenB,
-        int24 fee
+        int24 tickSpacing
     ) external view returns (address pool);
 }
 
