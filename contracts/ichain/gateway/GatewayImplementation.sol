@@ -250,10 +250,10 @@ contract GatewayImplementation is GatewayStorage {
     //     GatewayHelper.setDChainExecutionFeePerRequest(_gatewayStates, dChainExecutionFeePerRequest);
     // }
 
-    // @notic Claim dChain executionFee to account `to`
-    function claimDChainExecutionFee(address to) external _onlyAdmin_ {
-        GatewayHelper.claimDChainExecutionFee(_gatewayStates, to);
-    }
+    // // @notic Claim dChain executionFee to account `to`
+    // function claimDChainExecutionFee(address to) external _onlyAdmin_ {
+    //     GatewayHelper.claimDChainExecutionFee(_gatewayStates, to);
+    // }
 
     // @notice Claim unused iChain execution fee for dTokenId
     function claimUnusedIChainExecutionFee(uint256 dTokenId, bool isLp) external {
@@ -270,6 +270,10 @@ contract GatewayImplementation is GatewayStorage {
     // @notice Redeem B0 for burning IOU
     function redeemIOU(uint256 b0Amount) external {
         GatewayHelper.redeemIOU(tokenB0, vault0, iou, msg.sender, b0Amount);
+    }
+
+    function approveSwapper(address bToken) external _onlyAdmin_ {
+        bToken.approveMax(address(swapper));
     }
 
     //================================================================================
