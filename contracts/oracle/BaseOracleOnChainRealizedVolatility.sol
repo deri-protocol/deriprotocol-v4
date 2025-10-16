@@ -47,7 +47,7 @@ contract BaseOracleOnChainRealizedVolatility is Admin {
         infos[oracleId].tau = tau;
         infos[oracleId].timestamp = block.timestamp;
         infos[oracleId].price = initPrice;
-        infos[oracleId].volatility = SafeMath.min(initVolatility, MAXVOL);
+        infos[oracleId].volatility = initVolatility;
     }
 
     function getValue(bytes32 oracleId) external view returns (int256) {
