@@ -27,6 +27,7 @@ contract BaseOracleOnChainRealizedVolatility is Admin {
     }
 
     int256 constant ONE = 1e18;
+    int256 constant MAXVOL = 2e18;
 
     // oracleId => Info
     mapping (bytes32 => Info) public infos;
@@ -46,7 +47,7 @@ contract BaseOracleOnChainRealizedVolatility is Admin {
         infos[oracleId].tau = tau;
         infos[oracleId].timestamp = block.timestamp;
         infos[oracleId].price = initPrice;
-        infos[oracleId].volatility = initVolatility;
+        infos[oracleId].volatility = SafeMath.min(initVolatility, MAXVOL);
     }
 
     function getValue(bytes32 oracleId) external view returns (int256) {
@@ -65,7 +66,7 @@ contract BaseOracleOnChainRealizedVolatility is Admin {
             } else {
                 variance = r ** 2 / ONE * 31536000 / deltaT;
             }
-            int256 volatility = PRBMathSD59x18.sqrt(variance);
+            int256 volatility = SafeMath.min(PRBMathSD59x18.sqrt(variance), MAXVOL);
 
             infos[oracleId].timestamp = block.timestamp;
             infos[oracleId].price = currentPrice;
