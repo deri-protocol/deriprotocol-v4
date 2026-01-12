@@ -505,7 +505,12 @@ contract GatewayImplementation is GatewayStorage {
         _getExParams(data);
         uint256 realMoneyMargin = _getDTokenLiquidity(data);
 
-        uint256 requestId = _incrementRequestId(pTokenId);
+        // Liquidation is a termination process, so replay attacks are not possible.
+        // Therefore, we use the current requestId without incrementing it.
+        // This ensures that calling `requestLiquidate` does not block any ongoing processes.
+        uint256 gatewayRequestId = _gatewayStates.getUint(I.S_GATEWAYREQUESTID);
+        uint256 userRequestId = _dTokenStates[pTokenId].getUint(I.D_REQUESTID);
+        uint256 requestId = (gatewayRequestId << 128) + userRequestId;
         emit RequestLiquidate(
             requestId,
             pTokenId,
