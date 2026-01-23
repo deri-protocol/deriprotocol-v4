@@ -192,7 +192,7 @@ contract EngineImplementation is EngineStorage {
         }
         // In `RequestLiquidate` event, the requestId is not a sequence number, but the request timestamp
         // we check this timestamp is still valid or not, with a hardcoded expiring window (3 minutes)
-        if (v.requestId + 180 > block.timestamp) {
+        if (block.timestamp >= v.requestId + 180) {
             revert InvalidRequestId();
         }
         _liquidate(v);
