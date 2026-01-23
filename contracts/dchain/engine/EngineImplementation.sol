@@ -190,7 +190,11 @@ contract EngineImplementation is EngineStorage {
         if (eventData.length != 160) {
             revert InvalidEventData();
         }
-        _updateUserRequestId(v.pTokenId, v.requestId);
+        // In `RequestLiquidate` event, the requestId is not a sequence number, but the request timestamp
+        // we check this timestamp is still valid or not, with a hardcoded expiring window (3 minutes)
+        if (v.requestId + 180 > block.timestamp) {
+            revert InvalidRequestId();
+        }
         _liquidate(v);
     }
 
