@@ -402,6 +402,7 @@ contract GatewayImplementation is GatewayStorage {
         Data memory data = _getDataAndCheckBTokenConsistency(msg.sender, pTokenId, bToken);
 
         if (bToken == tokenETH) {
+            // Only bAmount of msg.value is used; any excess ETH sent is not refunded ¡ª caller's responsibility
             if (bAmount > msg.value) {
                 revert InvalidBAmount();
             }
@@ -692,6 +693,7 @@ contract GatewayImplementation is GatewayStorage {
     function finishLiquidate(bytes memory eventData, bytes memory signature) external _reentryLock_ {
         GatewayHelper.verifyEventData(eventData, signature, 224, dChainEventSigner);
         IGateway.VarOnExecuteLiquidate memory v = abi.decode(eventData, (IGateway.VarOnExecuteLiquidate));
+        // _checkRequestId is not needed here: finishLiquidate can only be called once per account
 
         // Cumulate unsettled PNL to b0Amount
         Data memory data = _getDataAndCheckBTokenConsistency(pToken.ownerOf(v.pTokenId), v.pTokenId, _dTokenStates[v.pTokenId].getAddress(I.D_BTOKEN));

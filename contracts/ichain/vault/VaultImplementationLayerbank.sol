@@ -23,6 +23,7 @@ contract VaultImplementationLayerbank is VaultStorage {
     error OnlyGateway();
     error DepositError();
     error RedeemError();
+    error TinyShareOfInitDeposit();
 
     uint256 constant UONE = 1e18;
     address constant assetETH = address(1);
@@ -120,6 +121,10 @@ contract VaultImplementationLayerbank is VaultStorage {
         mintedSt = m1 == 0
             ? m2.rescale(market.decimals(), 18)
             : mAmount * stTotalAmount / m1;
+
+        if (m1 == 0 && mintedSt < 1e9) { // prevent an initial tiny share amount to affect later deposits
+            revert TinyShareOfInitDeposit();
+        }
 
         // Update the staked amount for 'dTokenId' and the total staked amount
         stAmounts[dTokenId] += mintedSt;

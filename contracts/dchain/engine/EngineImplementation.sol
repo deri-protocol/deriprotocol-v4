@@ -610,6 +610,7 @@ contract EngineImplementation is EngineStorage {
 
     function _settleUndistributedPnl(Data memory data, int256 undistributedPnl) internal pure {
         data.lpsPnl += undistributedPnl;
+        // totalLiquidity is never 0 in practice ¡ª liquidity is added after deploy before any operation
         int256 diff = undistributedPnl * ONE / data.totalLiquidity;
         data.cumulativePnlPerLiquidity = data.cumulativePnlPerLiquidity.addUnchecked(diff);
     }

@@ -29,6 +29,7 @@ contract VaultImplementationCompound is VaultStorage {
     error ExitMarketError();
     error DepositError();
     error RedeemError();
+    error TinyShareOfInitDeposit();
 
     uint256 constant UONE = 1e18;
     address constant assetETH = address(1);
@@ -111,7 +112,8 @@ contract VaultImplementationCompound is VaultStorage {
         if (stAmount != 0) {
             // mAmount is the market token (e.g. cUSDC) balance associated with dTokenId
             uint256 mAmount = market.balanceOfThis() * stAmount / stTotalAmount;
-            // Venus exchange rate which convert market amount to asset amount, e.g. cUSDC to USDC
+            // exchangeRateStored() is intentionally used here (view function cannot call state-changing exchangeRateCurrent());
+            // getBalance() may return a slightly stale value if interest has accrued since the last market interaction
             uint256 exRate = ICompoundMarket(market).exchangeRateStored();
             // Balance in asset, e.g. USDC
             balance = exRate * mAmount / UONE;
@@ -144,6 +146,10 @@ contract VaultImplementationCompound is VaultStorage {
             ? m2.rescale(market.decimals(), 18)
             : (m2 - m1) * stTotalAmount / m1;
 
+        if (m1 == 0 && mintedSt < 1e9) { // prevent an initial tiny share amount to affect later deposits
+            revert TinyShareOfInitDeposit();
+        }
+
         // Update the staked amount for 'dTokenId' and the total staked amount
         stAmounts[dTokenId] += mintedSt;
         stTotalAmount += mintedSt;
@@ -168,6 +174,8 @@ contract VaultImplementationCompound is VaultStorage {
 
         {
             // Calculate the market token amount ('mAmount') and available assets ('available') for redemption
+            // exchangeRateStored() is intentionally used here; the actual redeemed amount is determined by the
+            // protocol itself, so stale rate only affects the redeem-vs-redeemUnderlying branch decision, not the output
             uint256 exRate = ICompoundMarket(market).exchangeRateStored();
             uint256 available = exRate * mAmount / UONE;
 
