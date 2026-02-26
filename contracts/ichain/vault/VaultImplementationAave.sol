@@ -22,6 +22,7 @@ contract VaultImplementationAave is VaultStorage {
 
     error OnlyGateway();
     error WithdrawError();
+    error TinyShareOfInitDeposit();
 
     uint256 constant UONE = 1e18;
     address constant assetETH = address(1);
@@ -116,6 +117,9 @@ contract VaultImplementationAave is VaultStorage {
         uint256 stTotal = stTotalAmount;
         if (stTotal == 0) {
             mintedSt = amount.rescale(asset.decimals(), 18);
+            if (mintedSt < 1e9) { // prevent an initial tiny share amount to affect later deposits
+                revert TinyShareOfInitDeposit();
+            }
         } else {
             uint256 amountTotal = market.balanceOfThis();
             mintedSt = stTotal * amount / (amountTotal - amount);

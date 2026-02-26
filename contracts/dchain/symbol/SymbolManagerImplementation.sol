@@ -389,7 +389,10 @@ contract SymbolManagerImplementation is SymbolManagerStorage {
             category == CATEGORY_GAMMA  ? state.getBytes32(Gamma.S_VOLATILITYID)  :
             bytes32(0)
         )));
-        return IOracle(oracle).getValueCurrentBlock(oracleId);
+        int256 volatility = IOracle(oracle).getValueCurrentBlock(oracleId);
+        // Cap volatility at 300% to prevent mispricing during extreme market conditions
+        require(volatility <= 3e18, 'Extreme volatility');
+        return volatility;
     }
 
     function _settleOnAddLiquidity(bytes32 symbolId, int256 liquidity)

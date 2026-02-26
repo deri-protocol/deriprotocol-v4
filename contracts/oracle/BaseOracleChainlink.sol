@@ -9,6 +9,8 @@ contract BaseOracleChainlink is Admin {
     // oracleId => feed
     mapping (bytes32 => address) public chainlinkFeeds;
 
+    uint256 private constant STALENESS_THRESHOLD = 1 hours;
+
     function set(string memory symbol, address feed) external _onlyAdmin_ {
         bytes32 oracleId = keccak256(abi.encodePacked(symbol));
         chainlinkFeeds[oracleId] = feed;
@@ -16,7 +18,12 @@ contract BaseOracleChainlink is Admin {
 
     function getValue(bytes32 oracleId) public view returns (int256) {
         IChainlinkFeed feed = IChainlinkFeed(chainlinkFeeds[oracleId]);
-        (, int256 value, , ,) = feed.latestRoundData();
+        (uint80 roundId, int256 value, , uint256 updatedAt, uint80 answeredInRound) = feed.latestRoundData();
+
+        require(value > 0, 'Invalid price');
+        require(updatedAt != 0 && block.timestamp - updatedAt <= STALENESS_THRESHOLD, 'Stale price');
+        require(answeredInRound >= roundId, 'Incomplete round');
+
         uint8 decimals = feed.decimals();
         if (decimals != 18) {
             value *= int256(10 ** (18 - decimals));
