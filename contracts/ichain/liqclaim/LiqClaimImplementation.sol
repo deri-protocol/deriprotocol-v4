@@ -42,7 +42,7 @@ contract LiqClaimImplementation is LiqClaimStorage {
     }
 
     // should transfer token before calling registerDeposit
-    // The absence of access control is by design ¡ª any caller can register a deposit, but the token transfer
+    // The absence of access control is by design -- any caller can register a deposit, but the token transfer
     // must precede this call, ensuring the balance check enforces correctness
     function registerDeposit(address owner, address bToken, uint256 amount) external {
         if (amount > 0) {

@@ -251,9 +251,9 @@ contract GatewayImplementation is GatewayStorage {
     // }
 
     // @notic Claim dChain executionFee to account `to`
-    function claimDChainExecutionFee(address to) external _onlyAdmin_ {
-        GatewayHelper.claimDChainExecutionFee(_gatewayStates, to);
-    }
+    // function claimDChainExecutionFee(address to) external _onlyAdmin_ {
+    //     GatewayHelper.claimDChainExecutionFee(_gatewayStates, to);
+    // }
 
     // @notice Claim unused iChain execution fee for dTokenId
     function claimUnusedIChainExecutionFee(uint256 dTokenId, bool isLp) external {
@@ -300,7 +300,7 @@ contract GatewayImplementation is GatewayStorage {
      * @param bToken The address of the base token to add as liquidity.
      * @param bAmount The amount of base tokens to add as liquidity.
      */
-    function requestAddLiquidity(uint256 lTokenId, address bToken, uint256 bAmount) external payable {
+    function requestAddLiquidity(uint256 lTokenId, address bToken, uint256 bAmount) external payable _reentryLock_ {
         if (lTokenId == 0) {
             lTokenId = lToken.mint(msg.sender);
         } else {
@@ -344,7 +344,7 @@ contract GatewayImplementation is GatewayStorage {
      * @param bToken The address of the base token to remove as liquidity.
      * @param bAmount The amount of base tokens to remove as liquidity.
      */
-    function requestRemoveLiquidity(uint256 lTokenId, address bToken, uint256 bAmount) external payable {
+    function requestRemoveLiquidity(uint256 lTokenId, address bToken, uint256 bAmount) external payable _reentryLock_ {
         _checkLTokenIdOwner(lTokenId, msg.sender);
 
         _receiveExecutionFee(lTokenId, _executionFees[I.ACTION_REQUESTREMOVELIQUIDITY]);
@@ -388,7 +388,7 @@ contract GatewayImplementation is GatewayStorage {
      * @param singlePosition The flag whether trader is using singlePosition margin.
      * @return The unique identifier pTokenId.
      */
-    function requestAddMargin(uint256 pTokenId, address bToken, uint256 bAmount, bool singlePosition) public payable returns (uint256) {
+    function requestAddMargin(uint256 pTokenId, address bToken, uint256 bAmount, bool singlePosition) public payable _reentryLock_ returns (uint256) {
         if (pTokenId == 0) {
             pTokenId = pToken.mint(msg.sender);
             if (singlePosition) {
@@ -402,7 +402,7 @@ contract GatewayImplementation is GatewayStorage {
         Data memory data = _getDataAndCheckBTokenConsistency(msg.sender, pTokenId, bToken);
 
         if (bToken == tokenETH) {
-            // Only bAmount of msg.value is used; any excess ETH sent is not refunded ¡ª caller's responsibility
+            // Only bAmount of msg.value is used; any excess ETH sent is not refunded -- caller's responsibility
             if (bAmount > msg.value) {
                 revert InvalidBAmount();
             }
@@ -429,7 +429,7 @@ contract GatewayImplementation is GatewayStorage {
         return pTokenId;
     }
 
-    function requestAddMarginB0(uint256 pTokenId, uint256 b0Amount) external {
+    function requestAddMarginB0(uint256 pTokenId, uint256 b0Amount) external _reentryLock_ {
         _checkPTokenIdOwner(pTokenId, msg.sender);
         tokenB0.transferIn(msg.sender, b0Amount);
         vault0.deposit(uint256(0), b0Amount);
@@ -443,7 +443,7 @@ contract GatewayImplementation is GatewayStorage {
      * @param bToken The address of the base token to remove as margin.
      * @param bAmount The amount of base tokens to remove as margin.
      */
-    function requestRemoveMargin(uint256 pTokenId, address bToken, uint256 bAmount) external payable {
+    function requestRemoveMargin(uint256 pTokenId, address bToken, uint256 bAmount) external payable _reentryLock_ {
         _checkPTokenIdOwner(pTokenId, msg.sender);
 
         _receiveExecutionFee(pTokenId, _executionFees[I.ACTION_REQUESTREMOVEMARGIN]);
@@ -476,7 +476,7 @@ contract GatewayImplementation is GatewayStorage {
      * @param symbolId The identifier of the trading symbol.
      * @param tradeParams An array of trade parameters for the trade execution.
      */
-    function requestTrade(uint256 pTokenId, bytes32 symbolId, int256[] calldata tradeParams) public payable {
+    function requestTrade(uint256 pTokenId, bytes32 symbolId, int256[] calldata tradeParams) public payable _reentryLock_ {
         _checkPTokenIdOwner(pTokenId, msg.sender);
 
         _receiveExecutionFee(pTokenId, _executionFees[I.ACTION_REQUESTTRADE]);
@@ -501,7 +501,7 @@ contract GatewayImplementation is GatewayStorage {
      * @notice Request to liquidate a specified PToken.
      * @param pTokenId The unique identifier of the PToken.
      */
-    function requestLiquidate(uint256 pTokenId) external {
+    function requestLiquidate(uint256 pTokenId) external _reentryLock_ {
         Data memory data = _getDataAndCheckBTokenConsistency(pToken.ownerOf(pTokenId), pTokenId, _dTokenStates[pTokenId].getAddress(I.D_BTOKEN));
         _getExParams(data);
         uint256 realMoneyMargin = _getDTokenLiquidity(data);
@@ -536,7 +536,7 @@ contract GatewayImplementation is GatewayStorage {
         bytes32 symbolId,
         int256[] calldata tradeParams,
         bool singlePosition
-    ) external payable {
+    ) external payable _reentryLock_ {
         if (bToken == tokenETH) {
             uint256 executionFee = _executionFees[I.ACTION_REQUESTTRADE];
             if (bAmount + executionFee > msg.value) { // revert if bAmount > msg.value - executionFee
@@ -561,7 +561,7 @@ contract GatewayImplementation is GatewayStorage {
         uint256 bAmount,
         bytes32 symbolId,
         int256[] calldata tradeParams
-    ) external payable {
+    ) external payable _reentryLock_ {
         _checkPTokenIdOwner(pTokenId, msg.sender);
 
         _receiveExecutionFee(pTokenId, _executionFees[I.ACTION_REQUESTTRADEANDREMOVEMARGIN]);
