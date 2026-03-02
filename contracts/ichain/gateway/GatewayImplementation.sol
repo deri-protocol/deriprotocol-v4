@@ -536,7 +536,7 @@ contract GatewayImplementation is GatewayStorage {
         bytes32 symbolId,
         int256[] calldata tradeParams,
         bool singlePosition
-    ) external payable _reentryLock_ {
+    ) external payable {
         if (bToken == tokenETH) {
             uint256 executionFee = _executionFees[I.ACTION_REQUESTTRADE];
             if (bAmount + executionFee > msg.value) { // revert if bAmount > msg.value - executionFee
